@@ -41,11 +41,11 @@
       </div>
       <div class="auth-field">
         <label class="field-label">Email</label>
-        <input class="field-input" id="email" type="email" required autocomplete="email">
+        <input class="field-input" id="email" type="email" required autocomplete="email" autocapitalize="none" autocorrect="off" spellcheck="false">
       </div>
       <div class="auth-field">
         <label class="field-label">Mot de passe</label>
-        <input class="field-input" id="password" type="password" required autocomplete="current-password" minlength="6">
+        <input class="field-input" id="password" type="password" required autocomplete="current-password" minlength="6" autocapitalize="none" autocorrect="off" spellcheck="false">
       </div>
       <div id="forgot-link" style="text-align:right;margin:-8px 0 14px;">
         <a href="#" id="forgot-password" style="font-size:12px;color:var(--text-faint);">Mot de passe oublié ?</a>
@@ -109,7 +109,7 @@
     e.preventDefault();
     showError('');
     const email = document.getElementById('email').value.trim();
-    const password = document.getElementById('password').value;
+    const password = document.getElementById('password').value.trim();
     const submitBtn = document.getElementById('submit-btn');
     submitBtn.disabled = true;
 
