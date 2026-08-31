@@ -119,6 +119,8 @@
     if (current && opts.indexOf(current) === -1) opts.unshift(current);
     return opts.map(function(o){ return '<option value="' + esc(o) + '"' + (o === current ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('');
   }
+  const DAY_TYPE_LABELS = { training: "Jour d'entraînement", off: 'Jour off', diet1: 'Diète 1', diet2: 'Diète 2' };
+  function dayTypeLabel(type){ return DAY_TYPE_LABELS[type] || type; }
   function currentWeekFor(program){
     const days = Math.floor((Date.now() - new Date(program.start_date + 'T00:00:00')) / 86400000);
     return Math.max(1, Math.min(12, Math.floor(days / 7) + 1));
@@ -470,7 +472,7 @@
 
     el.innerHTML = '<div id="diet-days"></div>' +
       '<div class="mini-form" style="margin-top:10px;">' +
-      '<div class="mini-field"><label>Type de jour</label><select id="new-day-type"><option value="training">Jour d\'entraînement</option><option value="off">Jour off</option></select></div>' +
+      '<div class="mini-field"><label>Type de jour</label><select id="new-day-type"><option value="training">Jour d\'entraînement</option><option value="off">Jour off</option><option value="diet1">Diète 1</option><option value="diet2">Diète 2</option></select></div>' +
       '<button class="btn" id="add-day-btn">+ Ajouter un jour</button></div>';
 
     const daysWrap = document.getElementById('diet-days');
@@ -480,7 +482,7 @@
       for (const d of days) {
         const card = document.createElement('div');
         card.className = 'sub-card';
-        card.innerHTML = '<div style="font-weight:600;margin-bottom:10px;">' + (d.day_type === 'training' ? "Jour d'entraînement" : 'Jour off') + '</div><div class="meals-wrap"></div>';
+        card.innerHTML = '<div style="font-weight:600;margin-bottom:10px;">' + dayTypeLabel(d.day_type) + '</div><div class="meals-wrap"></div>';
         daysWrap.appendChild(card);
         await renderMeals(card.querySelector('.meals-wrap'), d);
       }

@@ -246,6 +246,29 @@
   });
 
   function esc(s){ return (s == null ? '' : String(s)).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  const DAY_TYPE_LABELS = { training: "Jour d'entraînement", off: 'Jour off', diet1: 'Diète 1', diet2: 'Diète 2' };
+  function dayTypeLabel(type){ return DAY_TYPE_LABELS[type] || type; }
+  function legendRow(color, label, valueGrams){
+    return '<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0;">' +
+      '<span style="width:9px;height:9px;border-radius:3px;background:' + color + ';flex:none;"></span>' +
+      '<span style="flex:1;color:var(--text-dim);">' + label + '</span>' +
+      '<span style="font-weight:600;font-variant-numeric:tabular-nums;">' + valueGrams.toFixed(0) + ' g</span>' +
+    '</div>';
+  }
+  function donutSvg(p, g, l){
+    const kcalP = p * 4, kcalG = g * 4, kcalL = l * 9;
+    const total = (kcalP + kcalG + kcalL) || 1;
+    const circumference = 339.29;
+    const lenP = circumference * (kcalP / total);
+    const lenG = circumference * (kcalG / total);
+    const lenL = Math.max(0, circumference - lenP - lenG);
+    return '<svg viewBox="0 0 120 120" style="width:104px;height:104px;flex:none;">' +
+      '<circle cx="60" cy="60" r="54" fill="none" stroke="var(--surface-3)" stroke-width="14"/>' +
+      '<circle cx="60" cy="60" r="54" fill="none" stroke="#F7C725" stroke-width="14" stroke-dasharray="' + lenP.toFixed(1) + ' ' + (circumference - lenP).toFixed(1) + '" stroke-dashoffset="0" transform="rotate(-90 60 60)"/>' +
+      '<circle cx="60" cy="60" r="54" fill="none" stroke="#FF7A59" stroke-width="14" stroke-dasharray="' + lenG.toFixed(1) + ' ' + (circumference - lenG).toFixed(1) + '" stroke-dashoffset="' + (-lenP).toFixed(1) + '" transform="rotate(-90 60 60)"/>' +
+      '<circle cx="60" cy="60" r="54" fill="none" stroke="#948668" stroke-width="14" stroke-dasharray="' + lenL.toFixed(1) + ' ' + (circumference - lenL).toFixed(1) + '" stroke-dashoffset="' + (-(lenP + lenG)).toFixed(1) + '" transform="rotate(-90 60 60)"/>' +
+    '</svg>';
+  }
 
   let myCoachId = null;
 
@@ -377,7 +400,7 @@
 
     let html = '';
     for (const d of days) {
-      html += '<div class="card" style="margin-bottom:16px;"><h3 style="margin:0 0 12px;font-size:15px;">' + (d.day_type === 'training' ? "Jour d'entraînement" : 'Jour off') + '</h3>';
+      html += '<div class="card" style="margin-bottom:16px;"><h3 style="margin:0 0 12px;font-size:15px;">' + dayTypeLabel(d.day_type) + '</h3>';
       const { data: meals } = await supabaseClient.from('meals').select('*').eq('diet_day_id', d.id).order('meal_order', { ascending: true });
       const dayTotals = { p: 0, g: 0, l: 0, kcal: 0 };
       for (const m of (meals || [])) {
@@ -392,7 +415,18 @@
         });
         html += '</div>';
       }
-      html += '<div class="row" style="font-weight:600;">Total du jour<div style="flex:1;text-align:right;">' + dayTotals.p.toFixed(0) + 'g P · ' + dayTotals.g.toFixed(0) + 'g G · ' + dayTotals.l.toFixed(0) + 'g L · ' + dayTotals.kcal.toFixed(0) + ' kcal</div></div>';
+      html += '<div style="display:flex;align-items:center;gap:18px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);flex-wrap:wrap;">' +
+        donutSvg(dayTotals.p, dayTotals.g, dayTotals.l) +
+        '<div style="flex:1;min-width:140px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">' +
+        '<span style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-faint);font-weight:600;">Total du jour</span>' +
+        '<span style="font-family:\'Space Grotesk\',sans-serif;font-size:19px;font-weight:600;">' + dayTotals.kcal.toFixed(0) + '<span style="font-size:11.5px;color:var(--text-faint);font-weight:500;"> kcal</span></span>' +
+        '</div>' +
+        legendRow('#F7C725', 'Protéines', dayTotals.p) +
+        legendRow('#FF7A59', 'Glucides', dayTotals.g) +
+        legendRow('#948668', 'Lipides', dayTotals.l) +
+        '</div>' +
+      '</div>';
       html += '</div>';
     }
     el.innerHTML = html;
