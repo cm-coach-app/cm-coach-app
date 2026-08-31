@@ -11,6 +11,9 @@
 </head>
 <body>
 <div class="app">
+  <div class="logout-fab logout-trigger" title="Se déconnecter">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+  </div>
   <aside class="sidebar">
     <div class="brand">
       <div class="brand-mark">CM</div>
@@ -38,7 +41,7 @@
       <div class="avatar" id="avatar-initials">--</div>
       <div style="flex:1;min-width:0;">
         <div style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" id="student-name">…</div>
-        <div class="logout-link" id="logout-btn">Se déconnecter</div>
+        <div class="logout-link logout-trigger">Se déconnecter</div>
       </div>
     </div>
   </aside>
@@ -147,9 +150,11 @@
     });
   });
 
-  document.getElementById('logout-btn').addEventListener('click', async function(){
-    await supabaseClient.auth.signOut();
-    window.location.href = 'index.html';
+  document.querySelectorAll('.logout-trigger').forEach(function(btn){
+    btn.addEventListener('click', async function(){
+      await supabaseClient.auth.signOut();
+      window.location.href = 'index.html';
+    });
   });
 
   // ---- Chart ----

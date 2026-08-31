@@ -100,6 +100,7 @@ input,select,textarea,button{font-family:inherit;}
 .macro-lbl{font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.04em;}
 .food-note{font-size:12px;line-height:1.5;color:var(--text-dim);margin:0;}
 .food-unit{font-size:11px;color:var(--text-faint);}
+.logout-fab{display:none;}
 
 @media (max-width: 860px){
   .app{flex-direction:column-reverse;min-width:0;}
@@ -111,6 +112,7 @@ input,select,textarea,button{font-family:inherit;}
   .main{padding:20px 16px 100px;}
   .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
   .food-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .logout-fab{display:flex;position:fixed;top:14px;right:14px;width:36px;height:36px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);align-items:center;justify-content:center;color:var(--text-dim);cursor:pointer;z-index:60;box-shadow:0 6px 18px rgba(0,0,0,0.35);}
 }
 
 @media (max-width: 520px){
