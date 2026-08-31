@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM Coach — Espace coach</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">CM</div>
+      <div class="brand-name">CM COACH</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.6 2.7-6.2 6-6.2s6 2.6 6 6.2"/><circle cx="17.3" cy="9" r="2.3"/><path d="M15.6 14c2.2.5 3.7 2.5 3.7 6"/></svg>
+        Élèves
+      </div>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="avatar" id="avatar-initials">--</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" id="coach-name">…</div>
+        <div class="logout-link" id="logout-btn">Se déconnecter</div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <h1 class="page-title">Élèves</h1>
+    <p class="page-sub">Sélectionne un élève pour voir son suivi</p>
+
+    <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
+      <div class="card" style="width:272px;flex:none;padding:14px;">
+        <div id="roster-list"></div>
+        <div id="roster-empty" class="empty-note" style="display:none;padding:16px 6px 4px;">Aucun élève inscrit pour l'instant. Partage-leur le lien de connexion pour qu'ils créent leur compte "élève".</div>
+      </div>
+
+      <div class="card" style="flex:1;min-width:280px;" id="student-panel">
+        <div class="empty-note">Choisis un élève dans la liste pour voir son suivi de poids.</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="config.js"></script>
+<script>
+  let coachId = null;
+  let students = [];
+  let selectedId = null;
+
+  function toast(msg, isErr){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (isErr ? ' err' : '');
+    setTimeout(function(){ t.className = 'toast'; }, 3000);
+  }
+  function fmt1(n){ return Number(n).toFixed(1); }
+
+  document.getElementById('logout-btn').addEventListener('click', async function(){
+    await supabaseClient.auth.signOut();
+    window.location.href = 'index.html';
+  });
+
+  function renderRoster(){
+    const wrap = document.getElementById('roster-list');
+    wrap.innerHTML = '';
+    document.getElementById('roster-empty').style.display = students.length ? 'none' : 'block';
+    students.forEach(function(s){
+      const el = document.createElement('div');
+      el.className = 'roster-item' + (s.id === selectedId ? ' active' : '');
+      const initials = (s.full_name || '??').slice(0, 2).toUpperCase();
+      el.innerHTML = '<div class="avatar">' + initials + '</div><div><div class="roster-name">' + (s.full_name || 'Élève') + '</div></div>';
+      el.addEventListener('click', function(){ selectStudent(s.id); });
+      wrap.appendChild(el);
+    });
+  }
+
+  async function selectStudent(id){
+    selectedId = id;
+    renderRoster();
+    const panel = document.getElementById('student-panel');
+    panel.innerHTML = '<div class="empty-note">Chargement…</div>';
+
+    const student = students.find(function(s){ return s.id === id; });
+    const { data: goals } = await supabaseClient.from('weight_goals').select('*').eq('student_id', id).maybeSingle();
+    const { data: entries } = await supabaseClient.from('weight_entries').select('*').eq('student_id', id).order('entry_date', { ascending: true });
+    const history = entries || [];
+
+    let html = '<h3 style="margin:0 0 20px;font-size:18px;">' + (student.full_name || 'Élève') + '</h3>';
+
+    if (!goals) {
+      html += '<div style="margin-bottom:8px;font-size:13px;color:var(--text-dim);">Aucun objectif défini pour cet élève.</div>';
+      html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;">';
+      html += '<div style="flex:1;min-width:120px;"><label class="field-label">Poids de départ (kg)</label><input class="field-input" id="c-goal-start" type="number" step="0.1"></div>';
+      html += '<div style="flex:1;min-width:120px;"><label class="field-label">Poids objectif (kg)</label><input class="field-input" id="c-goal-target" type="number" step="0.1"></div>';
+      html += '</div><button class="btn" id="c-save-goals">Définir l\'objectif</button>';
+      panel.innerHTML = html;
+      document.getElementById('c-save-goals').addEventListener('click', async function(){
+        const start = parseFloat(document.getElementById('c-goal-start').value);
+        const target = parseFloat(document.getElementById('c-goal-target').value);
+        if (isNaN(start) || isNaN(target)) { toast('Remplis les deux poids.', true); return; }
+        const { error } = await supabaseClient.from('weight_goals').insert({ student_id: id, start_weight: start, goal_weight: target });
+        if (error) { toast(error.message, true); return; }
+        toast('Objectif défini.');
+        selectStudent(id);
+      });
+      return;
+    }
+
+    const current = history.length ? history[history.length - 1].weight : goals.start_weight;
+    const perte = goals.start_weight - current;
+    const totalToLose = goals.start_weight - goals.goal_weight;
+    const pct = totalToLose !== 0 ? Math.max(0, Math.min(100, (perte / totalToLose) * 100)) : 0;
+
+    html += '<div class="stat-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:20px;">';
+    html += '<div class="stat-tile"><div class="stat-label">Objectif</div><div class="stat-value">' + fmt1(goals.goal_weight) + ' kg</div></div>';
+    html += '<div class="stat-tile"><div class="stat-label">Actuel</div><div class="stat-value">' + fmt1(current) + ' kg</div></div>';
+    html += '<div class="stat-tile"><div class="stat-label">Perte totale</div><div class="stat-value" style="color:var(--accent);">' + (perte >= 0 ? '-' : '+') + fmt1(Math.abs(perte)) + ' kg</div></div>';
+    html += '<div class="stat-tile"><div class="stat-label">Objectif atteint</div><div class="stat-value">' + Math.round(pct) + ' %</div></div>';
+    html += '</div>';
+
+    if (history.length) {
+      html += '<h4 style="margin:0 0 8px;font-size:13px;color:var(--text-dim);">Dernières pesées</h4>';
+      history.slice().reverse().slice(0, 10).forEach(function(e){
+        html += '<div class="row"><div style="flex:1;color:var(--text-dim);">' + e.entry_date + '</div><div style="font-weight:600;font-family:\'Space Grotesk\',sans-serif;">' + fmt1(e.weight) + ' kg</div></div>';
+      });
+    } else {
+      html += '<div class="empty-note" style="padding:12px 0;">Aucune pesée enregistrée pour l\'instant.</div>';
+    }
+
+    panel.innerHTML = html;
+  }
+
+  (async function(){
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) { window.location.href = 'index.html'; return; }
+    const user = session.user;
+
+    const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', user.id).single();
+    if (!profile || profile.role !== 'coach') { window.location.href = 'student.html'; return; }
+
+    coachId = user.id;
+    const name = profile.full_name || user.email;
+    document.getElementById('coach-name').textContent = name;
+    document.getElementById('avatar-initials').textContent = name.slice(0, 2).toUpperCase();
+
+    const { data: studentRows } = await supabaseClient.from('profiles').select('id, full_name').eq('coach_id', coachId).eq('role', 'student');
+    students = (studentRows || []).map(function(s){ return { id: s.id, full_name: s.full_name, email: '' }; });
+    renderRoster();
+  })();
+</script>
+</body>
+</html>

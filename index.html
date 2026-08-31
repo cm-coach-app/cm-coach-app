@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM Coach</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body>
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="brand-mark">CM</div>
+      <div class="brand-name">CM COACH</div>
+    </div>
+
+    <div class="role-toggle" id="mode-toggle">
+      <button type="button" class="active" data-mode="login">Se connecter</button>
+      <button type="button" data-mode="signup">Créer un compte</button>
+    </div>
+
+    <div class="role-toggle" id="role-toggle" style="display:none;">
+      <button type="button" class="active" data-role="student">Je suis élève</button>
+      <button type="button" data-role="coach">Je suis coach</button>
+    </div>
+
+    <form id="auth-form">
+      <div class="auth-field" id="name-field" style="display:none;">
+        <label class="field-label">Nom complet</label>
+        <input class="field-input" id="full-name" type="text" autocomplete="name">
+      </div>
+      <div class="auth-field">
+        <label class="field-label">Email</label>
+        <input class="field-input" id="email" type="email" required autocomplete="email">
+      </div>
+      <div class="auth-field">
+        <label class="field-label">Mot de passe</label>
+        <input class="field-input" id="password" type="password" required autocomplete="current-password" minlength="6">
+      </div>
+      <button type="submit" class="btn" id="submit-btn" style="width:100%;">Se connecter</button>
+      <div class="auth-error" id="auth-error"></div>
+    </form>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script>
+  let mode = 'login';
+  let role = 'student';
+
+  document.querySelectorAll('#mode-toggle button').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('#mode-toggle button').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      mode = btn.dataset.mode;
+      document.getElementById('role-toggle').style.display = mode === 'signup' ? 'flex' : 'none';
+      document.getElementById('name-field').style.display = mode === 'signup' ? 'block' : 'none';
+      document.getElementById('submit-btn').textContent = mode === 'signup' ? 'Créer mon compte' : 'Se connecter';
+      document.getElementById('auth-error').textContent = '';
+    });
+  });
+
+  document.querySelectorAll('#role-toggle button').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('#role-toggle button').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      role = btn.dataset.role;
+    });
+  });
+
+  function showError(msg){
+    document.getElementById('auth-error').textContent = msg;
+  }
+
+  async function redirectByRole(){
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (!user) return;
+    const { data: profile } = await supabaseClient.from('profiles').select('role').eq('id', user.id).single();
+    window.location.href = (profile && profile.role === 'coach') ? 'coach.html' : 'student.html';
+  }
+
+  document.getElementById('auth-form').addEventListener('submit', async function(e){
+    e.preventDefault();
+    showError('');
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const submitBtn = document.getElementById('submit-btn');
+    submitBtn.disabled = true;
+
+    try {
+      if (mode === 'signup') {
+        const fullName = document.getElementById('full-name').value.trim();
+        const { data, error } = await supabaseClient.auth.signUp({
+          email, password,
+          options: { data: { full_name: fullName, role: role } }
+        });
+        if (error) throw error;
+        if (data.session) {
+          await redirectByRole();
+        } else {
+          showError('Compte créé. Vérifie ta boîte mail pour confirmer, puis connecte-toi.');
+        }
+      } else {
+        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        await redirectByRole();
+      }
+    } catch (err) {
+      showError(err.message || 'Une erreur est survenue.');
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  // If already logged in, skip straight to the right dashboard
+  (async function(){
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session) await redirectByRole();
+  })();
+</script>
+</body>
+</html>
