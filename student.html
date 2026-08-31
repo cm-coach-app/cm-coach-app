@@ -251,7 +251,7 @@
 
   // ---- Entraînement (élève) ----
   let currentSessionId = null;
-  let currentWeek = 1;
+  let currentWeek = null;
 
   function currentWeekFor(program){
     const days = Math.floor((Date.now() - new Date(program.start_date + 'T00:00:00')) / 86400000);
@@ -267,14 +267,16 @@
       return;
     }
     document.getElementById('prog-sub').textContent = program.name;
-    currentWeek = currentWeekFor(program);
+    if (currentWeek === null) currentWeek = currentWeekFor(program);
 
     const { data: sessions } = await supabaseClient.from('sessions').select('*').eq('program_id', program.id).order('day_order', { ascending: true });
     if (!sessions || !sessions.length) {
       el.innerHTML = '<div class="card empty-note">Aucune séance pour l\'instant.</div>';
       return;
     }
-    currentSessionId = sessions[0].id;
+    if (!currentSessionId || !sessions.some(function(s){ return s.id === currentSessionId; })) {
+      currentSessionId = sessions[0].id;
+    }
 
     let html = '<div class="mini-form" style="margin-bottom:16px;" id="sess-tabs">';
     sessions.forEach(function(s){
