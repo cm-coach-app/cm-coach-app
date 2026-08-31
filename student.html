@@ -311,11 +311,16 @@
     if (!el) return;
     el.innerHTML = '<div class="empty-note">Chargement…</div>';
     const { data: exercises } = await supabaseClient.from('exercises').select('*').eq('session_id', currentSessionId).order('exercise_order', { ascending: true });
-    const { data: logs } = await supabaseClient.from('exercise_logs').select('*').in('exercise_id', (exercises || []).map(function(e){ return e.id; })).eq('week', currentWeek);
+    const exIds = (exercises || []).map(function(e){ return e.id; });
+    const { data: logs } = await supabaseClient.from('exercise_logs').select('*').in('exercise_id', exIds).eq('week', currentWeek);
+    const { data: weekTargets } = exIds.length
+      ? await supabaseClient.from('exercise_targets').select('*').in('exercise_id', exIds).eq('week', currentWeek)
+      : { data: [] };
 
     let html = '';
     (exercises || []).forEach(function(ex){
-      const target = (ex.target_reps || '?') + ' × ' + (ex.target_charge != null ? ex.target_charge + ' kg' : '—');
+      const t = (weekTargets || []).find(function(wt){ return wt.exercise_id === ex.id; });
+      const target = (t && t.target_reps != null ? t.target_reps : '?') + ' × ' + (t && t.target_charge != null ? t.target_charge + ' kg' : '—');
       html += '<div class="sub-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
         '<b>' + esc(ex.name) + '</b><span class="tag">Cible : ' + target + '</span></div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;" data-ex="' + ex.id + '">';

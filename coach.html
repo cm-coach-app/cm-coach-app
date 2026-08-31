@@ -99,6 +99,9 @@
   let selectedId = null;
   let activeTab = 'poids';
   let coachFoods = [];
+  let currentWeek = null;
+
+  const MEAL_TYPES = ['Petit-déjeuner', 'Déjeuner', 'Collation', 'Dîner', 'Soir'];
 
   function toast(msg, isErr){
     const t = document.getElementById('toast');
@@ -110,6 +113,15 @@
   function esc(s){ return (s == null ? '' : String(s)).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
   function statTile(label, value, accent){
     return '<div class="stat-tile"><div class="stat-label">' + label + '</div><div class="stat-value"' + (accent ? ' style="color:var(--accent);"' : '') + '>' + value + '</div></div>';
+  }
+  function mealNameOptions(current){
+    const opts = MEAL_TYPES.slice();
+    if (current && opts.indexOf(current) === -1) opts.unshift(current);
+    return opts.map(function(o){ return '<option value="' + esc(o) + '"' + (o === current ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('');
+  }
+  function currentWeekFor(program){
+    const days = Math.floor((Date.now() - new Date(program.start_date + 'T00:00:00')) / 86400000);
+    return Math.max(1, Math.min(12, Math.floor(days / 7) + 1));
   }
 
   document.getElementById('logout-btn').addEventListener('click', async function(){
@@ -147,6 +159,7 @@
   function selectStudent(id){
     selectedId = id;
     activeTab = 'poids';
+    currentWeek = null;
     renderRoster();
     renderStudentPanel();
   }
@@ -295,9 +308,17 @@
       return;
     }
 
+    if (currentWeek === null) currentWeek = currentWeekFor(program);
+
     const { data: sessions } = await supabaseClient.from('sessions').select('*').eq('program_id', program.id).order('day_order', { ascending: true });
 
     let html = '<div style="margin-bottom:14px;"><div style="font-weight:600;">' + esc(program.name) + '</div><div style="font-size:11.5px;color:var(--text-faint);">Débuté le ' + program.start_date + '</div></div>';
+    html += '<div style="margin-bottom:6px;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-faint);font-weight:600;">Semaine (cibles reps/charge propres à chaque semaine)</div>';
+    html += '<div class="mini-form" id="week-chips" style="margin-bottom:18px;flex-wrap:wrap;">';
+    for (let w = 1; w <= 12; w++) {
+      html += '<div class="tag week-chip" data-week="' + w + '" style="cursor:pointer;' + (w === currentWeek ? 'background:var(--accent);color:#191506;' : '') + '">S' + w + '</div>';
+    }
+    html += '</div>';
     html += '<div id="sessions-list"></div>';
     html += '<div class="mini-form" style="margin-top:14px;">' +
       '<div class="mini-field" style="flex:1;min-width:160px;"><label>Nom de la séance</label><input id="new-sess-name" placeholder="Ex: Jour 1 — Bas du corps"></div>' +
@@ -305,6 +326,13 @@
       '<div class="mini-field"><label>Format</label><select id="new-sess-format"><option value="strength">Musculation</option><option value="circuit">Circuit</option></select></div>' +
       '<button class="btn" id="add-sess-btn">+ Ajouter</button></div>';
     el.innerHTML = html;
+
+    el.querySelectorAll('.week-chip').forEach(function(chip){
+      chip.addEventListener('click', function(){
+        currentWeek = parseInt(chip.dataset.week, 10);
+        loadEntrainementTab(el);
+      });
+    });
 
     const sessionsList = document.getElementById('sessions-list');
     if (!sessions || !sessions.length) {
@@ -344,17 +372,26 @@
 
   async function renderExercises(body, session){
     const { data: exercises } = await supabaseClient.from('exercises').select('*').eq('session_id', session.id).order('exercise_order', { ascending: true });
+    const exIds = (exercises || []).map(function(e){ return e.id; });
+    let targets = [];
+    if (exIds.length) {
+      const { data } = await supabaseClient.from('exercise_targets').select('*').in('exercise_id', exIds).eq('week', currentWeek);
+      targets = data || [];
+    }
+    function targetFor(exId){ return targets.find(function(t){ return t.exercise_id === exId; }); }
+
     let html = '';
     (exercises || []).forEach(function(ex){
+      const t = targetFor(ex.id);
       html += '<div class="row" style="align-items:center;">' +
         '<div style="flex:1;">' + esc(ex.name) + '</div>' +
-        '<input class="mini-input ex-reps" data-id="' + ex.id + '" type="number" value="' + (ex.target_reps || '') + '" placeholder="reps" style="width:64px;text-align:center;">' +
-        '<input class="mini-input ex-charge" data-id="' + ex.id + '" type="number" step="0.5" value="' + (ex.target_charge || '') + '" placeholder="kg" style="width:70px;text-align:center;margin-left:8px;">' +
+        '<input class="mini-input ex-reps" data-id="' + ex.id + '" type="number" value="' + (t && t.target_reps != null ? t.target_reps : '') + '" placeholder="reps" style="width:64px;text-align:center;">' +
+        '<input class="mini-input ex-charge" data-id="' + ex.id + '" type="number" step="0.5" value="' + (t && t.target_charge != null ? t.target_charge : '') + '" placeholder="kg" style="width:70px;text-align:center;margin-left:8px;">' +
       '</div>';
     });
     html += '<div class="mini-form" style="margin-top:10px;">' +
       '<div class="mini-field" style="flex:1;min-width:140px;"><label>Exercice</label><input class="new-ex-name" placeholder="Ex: Presse à cuisses"></div>' +
-      '<div class="mini-field"><label>Reps cible</label><input class="new-ex-reps" type="number" style="width:70px;"></div>' +
+      '<div class="mini-field"><label>Reps cible (S' + currentWeek + ')</label><input class="new-ex-reps" type="number" style="width:90px;"></div>' +
       '<div class="mini-field"><label>Charge (kg)</label><input class="new-ex-charge" type="number" step="0.5" style="width:80px;"></div>' +
       '<button class="btn add-ex-btn" style="padding:9px 16px;">+ Ajouter</button></div>';
     body.innerHTML = html;
@@ -362,23 +399,29 @@
     body.querySelectorAll('.ex-reps, .ex-charge').forEach(function(input){
       input.addEventListener('change', async function(){
         const id = this.dataset.id;
-        const field = this.classList.contains('ex-reps') ? 'target_reps' : 'target_charge';
-        const val = this.value === '' ? null : parseFloat(this.value);
-        const payload = {};
-        payload[field] = val;
-        const { error } = await supabaseClient.from('exercises').update(payload).eq('id', id);
+        const repsInput = body.querySelector('.ex-reps[data-id="' + id + '"]');
+        const chargeInput = body.querySelector('.ex-charge[data-id="' + id + '"]');
+        const reps = repsInput.value === '' ? null : parseInt(repsInput.value, 10);
+        const charge = chargeInput.value === '' ? null : parseFloat(chargeInput.value);
+        const { error } = await supabaseClient.from('exercise_targets').upsert(
+          { exercise_id: id, week: currentWeek, target_reps: reps, target_charge: charge },
+          { onConflict: 'exercise_id,week' }
+        );
         if (error) toast(error.message, true); else toast('Mis à jour.');
       });
     });
 
     body.querySelector('.add-ex-btn').addEventListener('click', async function(){
       const name = body.querySelector('.new-ex-name').value.trim();
-      const reps = parseInt(body.querySelector('.new-ex-reps').value, 10) || null;
-      const charge = parseFloat(body.querySelector('.new-ex-charge').value) || null;
+      const reps = body.querySelector('.new-ex-reps').value === '' ? null : parseInt(body.querySelector('.new-ex-reps').value, 10);
+      const charge = body.querySelector('.new-ex-charge').value === '' ? null : parseFloat(body.querySelector('.new-ex-charge').value);
       if (!name) { toast('Donne un nom à l\'exercice.', true); return; }
       const order = (exercises ? exercises.length : 0) + 1;
-      const { error } = await supabaseClient.from('exercises').insert({ session_id: session.id, name: name, exercise_order: order, target_reps: reps, target_charge: charge });
+      const { data: newEx, error } = await supabaseClient.from('exercises').insert({ session_id: session.id, name: name, exercise_order: order }).select().single();
       if (error) { toast(error.message, true); return; }
+      if (reps !== null || charge !== null) {
+        await supabaseClient.from('exercise_targets').insert({ exercise_id: newEx.id, week: currentWeek, target_reps: reps, target_charge: charge });
+      }
       toast('Exercice ajouté.');
       await renderExercises(body, session);
     });
@@ -431,7 +474,7 @@
     let html = '';
     (meals || []).forEach(function(m){
       html += '<div class="meal-block" data-meal-id="' + m.id + '" style="margin-bottom:12px;padding:10px;background:var(--surface-3);border-radius:10px;">' +
-        '<div style="font-weight:600;font-size:13px;margin-bottom:8px;">' + esc(m.name) + '</div>' +
+        '<select class="mini-input meal-name-select" data-meal="' + m.id + '" style="font-weight:600;font-size:13px;margin-bottom:8px;">' + mealNameOptions(m.name) + '</select>' +
         '<div class="meal-items" data-meal-id="' + m.id + '"></div>' +
         '<div class="mini-form" style="margin-top:10px;align-items:flex-end;">' +
         '<div class="mini-field" style="flex:1;min-width:140px;"><label>Aliment</label><select class="mini-input new-item-food"></select></div>' +
@@ -440,9 +483,17 @@
         '</div></div>';
     });
     html += '<div class="mini-form">' +
-      '<div class="mini-field" style="flex:1;min-width:140px;"><label>Nom du repas</label><input class="new-meal-name" placeholder="Ex: Matin"></div>' +
+      '<div class="mini-field" style="flex:1;min-width:140px;"><label>Nom du repas</label><select class="new-meal-name">' + mealNameOptions(null) + '</select></div>' +
       '<button class="btn add-meal-btn" style="padding:9px 16px;">+ Ajouter un repas</button></div>';
     wrap.innerHTML = html;
+
+    wrap.querySelectorAll('.meal-name-select').forEach(function(sel){
+      sel.addEventListener('change', async function(){
+        const { error } = await supabaseClient.from('meals').update({ name: this.value }).eq('id', this.dataset.meal);
+        if (error) { toast(error.message, true); return; }
+        toast('Repas renommé.');
+      });
+    });
 
     wrap.querySelectorAll('.new-item-food').forEach(function(sel){
       coachFoods.forEach(function(f){
