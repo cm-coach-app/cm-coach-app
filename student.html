@@ -110,7 +110,8 @@
     <div id="view-aliments" style="display:none;">
       <h1 class="page-title">Ma bibliothèque d'aliments</h1>
       <p class="page-sub">Ce que ton coach utilise, et pourquoi</p>
-      <div id="aliments-content" class="stat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));"><div class="empty-note">Chargement…</div></div>
+      <div class="filters" id="aliments-filters"></div>
+      <div id="aliments-content" class="food-grid"><div class="empty-note">Chargement…</div></div>
     </div>
   </main>
 </div>
@@ -433,16 +434,59 @@
   }
 
   // ---- Aliments (élève, lecture seule) ----
+  let aliFoods = [];
+  let aliFilter = 'tous';
+
   async function loadAliments(){
     const el = document.getElementById('aliments-content');
-    if (!myCoachId) { el.innerHTML = '<div class="empty-note">Bibliothèque non disponible.</div>'; return; }
-    const { data: foods } = await supabaseClient.from('foods').select('*').eq('coach_id', myCoachId).order('name', { ascending: true });
-    if (!foods || !foods.length) { el.innerHTML = '<div class="empty-note">Ton coach n\'a pas encore ajouté d\'aliments.</div>'; return; }
+    const filtersWrap = document.getElementById('aliments-filters');
+    if (!myCoachId) { filtersWrap.innerHTML = ''; el.innerHTML = '<div class="empty-note">Bibliothèque non disponible.</div>'; return; }
+    if (!aliFoods.length) {
+      const { data: foods } = await supabaseClient.from('foods').select('*').eq('coach_id', myCoachId).order('name', { ascending: true });
+      aliFoods = foods || [];
+    }
+    if (!aliFoods.length) { filtersWrap.innerHTML = ''; el.innerHTML = '<div class="empty-note">Ton coach n\'a pas encore ajouté d\'aliments.</div>'; return; }
+    renderAliments();
+  }
+
+  function renderAliments(){
+    const el = document.getElementById('aliments-content');
+    const filtersWrap = document.getElementById('aliments-filters');
+
+    const categories = [];
+    aliFoods.forEach(function(f){
+      const c = f.category || 'Autre';
+      if (categories.indexOf(c) === -1) categories.push(c);
+    });
+    if (categories.indexOf(aliFilter) === -1 && aliFilter !== 'tous') aliFilter = 'tous';
+
+    let filtersHtml = '<div class="filter-chip' + (aliFilter === 'tous' ? ' active' : '') + '" data-filter="tous">Tous</div>';
+    categories.forEach(function(c){
+      filtersHtml += '<div class="filter-chip' + (aliFilter === c ? ' active' : '') + '" data-filter="' + esc(c) + '">' + esc(c) + '</div>';
+    });
+    filtersWrap.innerHTML = filtersHtml;
+    filtersWrap.querySelectorAll('.filter-chip').forEach(function(chip){
+      chip.addEventListener('click', function(){
+        aliFilter = chip.dataset.filter;
+        renderAliments();
+      });
+    });
+
     let html = '';
-    foods.forEach(function(f){
-      html += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><b>' + esc(f.name) + '</b><span class="tag">' + esc(f.category || '') + '</span></div>' +
-        (f.benefit_note ? '<p style="font-size:12.5px;color:var(--text-dim);line-height:1.5;margin:0 0 10px;">' + esc(f.benefit_note) + '</p>' : '') +
-        '<div style="font-size:12px;color:var(--text-faint);">' + f.protein_per_100g + 'g P · ' + f.carbs_per_100g + 'g G · ' + f.fat_per_100g + 'g L · ' + f.kcal_per_100g + ' kcal /100g</div></div>';
+    aliFoods.forEach(function(f){
+      const cat = f.category || 'Autre';
+      if (aliFilter !== 'tous' && cat !== aliFilter) return;
+      html += '<div class="food-card">' +
+        '<div class="food-top"><div class="food-name">' + esc(f.name) + '</div><span class="cat-tag">' + esc(cat) + '</span></div>' +
+        (f.benefit_note ? '<p class="food-note">' + esc(f.benefit_note) + '</p>' : '') +
+        '<div class="macro-row">' +
+          '<div class="macro-item"><div class="macro-num">' + f.protein_per_100g + 'g</div><div class="macro-lbl">Prot</div></div>' +
+          '<div class="macro-item"><div class="macro-num">' + f.carbs_per_100g + 'g</div><div class="macro-lbl">Gluc</div></div>' +
+          '<div class="macro-item"><div class="macro-num">' + f.fat_per_100g + 'g</div><div class="macro-lbl">Lip</div></div>' +
+          '<div class="macro-item"><div class="macro-num">' + f.kcal_per_100g + '</div><div class="macro-lbl">Kcal</div></div>' +
+        '</div>' +
+        (f.unit_label ? '<div class="food-unit">1 ' + esc(f.unit_label) + ' ≈ ' + f.unit_weight + 'g</div>' : '') +
+      '</div>';
     });
     el.innerHTML = html;
   }

@@ -85,6 +85,21 @@ input,select,textarea,button{font-family:inherit;}
 .mini-input{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:6px 8px;color:var(--text);font-size:12.5px;}
 .mini-input:focus,.mini-field input:focus,.mini-field select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent);}
 
+.filters{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;}
+.filter-chip{padding:8px 15px;border-radius:999px;font-size:12.5px;font-weight:600;color:var(--text-dim);background:var(--surface-2);border:1px solid var(--border);cursor:pointer;}
+.filter-chip.active{background:var(--accent);color:#191506;border-color:var(--accent);}
+.food-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;}
+.food-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;display:flex;flex-direction:column;gap:10px;box-shadow:0 4px 18px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.03) inset;}
+.food-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+.food-name{font-size:14.5px;font-weight:600;margin:0;}
+.cat-tag{font-size:10px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--surface-3);color:var(--text-dim);text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;flex:none;}
+.macro-row{display:flex;gap:8px;padding:9px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);}
+.macro-item{flex:1;min-width:0;text-align:center;}
+.macro-num{font-size:13px;font-weight:600;font-family:'Space Grotesk',sans-serif;}
+.macro-lbl{font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.04em;}
+.food-note{font-size:12px;line-height:1.5;color:var(--text-dim);margin:0;}
+.food-unit{font-size:11px;color:var(--text-faint);}
+
 @media (max-width: 860px){
   .app{flex-direction:column-reverse;min-width:0;}
   .sidebar{position:sticky;bottom:10px;margin:0 10px 10px;width:auto;flex-direction:row;padding:8px 6px;gap:0;border:1px solid var(--border);border-radius:20px;z-index:50;justify-content:space-around;box-shadow:0 10px 28px rgba(0,0,0,0.45);}
@@ -94,4 +109,9 @@ input,select,textarea,button{font-family:inherit;}
   .nav-item svg{width:20px;height:20px;}
   .main{padding:20px 16px 100px;}
   .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .food-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+
+@media (max-width: 520px){
+  .food-grid{grid-template-columns:1fr;}
 }

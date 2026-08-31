@@ -85,7 +85,8 @@
         <button class="btn" id="add-food-btn">+ Ajouter l'aliment</button>
       </div>
 
-      <div id="foods-list"></div>
+      <div class="filters" id="aliments-filters"></div>
+      <div class="food-grid" id="foods-list"></div>
     </div>
   </main>
 </div>
@@ -608,21 +609,53 @@
     coachFoods = data || [];
   }
 
+  let alimentsFilter = 'tous';
+
   async function renderAlimentsView(){
     await loadCoachFoods();
+    const filtersWrap = document.getElementById('aliments-filters');
     const wrap = document.getElementById('foods-list');
     if (!coachFoods.length) {
+      filtersWrap.innerHTML = '';
       wrap.innerHTML = '<div class="empty-note">Aucun aliment pour l\'instant — ajoute-en un ci-dessus.</div>';
       return;
     }
+
+    const categories = [];
+    coachFoods.forEach(function(f){
+      const c = f.category || 'Autre';
+      if (categories.indexOf(c) === -1) categories.push(c);
+    });
+    if (categories.indexOf(alimentsFilter) === -1 && alimentsFilter !== 'tous') alimentsFilter = 'tous';
+
+    let filtersHtml = '<div class="filter-chip' + (alimentsFilter === 'tous' ? ' active' : '') + '" data-filter="tous">Tous</div>';
+    categories.forEach(function(c){
+      filtersHtml += '<div class="filter-chip' + (alimentsFilter === c ? ' active' : '') + '" data-filter="' + esc(c) + '">' + esc(c) + '</div>';
+    });
+    filtersWrap.innerHTML = filtersHtml;
+    filtersWrap.querySelectorAll('.filter-chip').forEach(function(chip){
+      chip.addEventListener('click', function(){
+        alimentsFilter = chip.dataset.filter;
+        renderAlimentsView();
+      });
+    });
+
     wrap.innerHTML = '';
     coachFoods.forEach(function(f){
+      const cat = f.category || 'Autre';
+      if (alimentsFilter !== 'tous' && cat !== alimentsFilter) return;
       const card = document.createElement('div');
-      card.className = 'sub-card';
+      card.className = 'food-card';
       card.innerHTML =
-        '<div style="display:flex;justify-content:space-between;align-items:center;"><b>' + esc(f.name) + '</b><span class="tag">' + esc(f.category || '') + '</span></div>' +
-        (f.benefit_note ? '<div style="font-size:12px;color:var(--text-dim);margin:6px 0;">' + esc(f.benefit_note) + '</div>' : '') +
-        '<div style="font-size:12px;color:var(--text-faint);">' + f.protein_per_100g + 'g P · ' + f.carbs_per_100g + 'g G · ' + f.fat_per_100g + 'g L · ' + f.kcal_per_100g + ' kcal /100g' + (f.unit_label ? ' · 1 ' + esc(f.unit_label) + ' ≈ ' + f.unit_weight + 'g' : '') + '</div>';
+        '<div class="food-top"><div class="food-name">' + esc(f.name) + '</div><span class="cat-tag">' + esc(cat) + '</span></div>' +
+        (f.benefit_note ? '<p class="food-note">' + esc(f.benefit_note) + '</p>' : '') +
+        '<div class="macro-row">' +
+          '<div class="macro-item"><div class="macro-num">' + f.protein_per_100g + 'g</div><div class="macro-lbl">Prot</div></div>' +
+          '<div class="macro-item"><div class="macro-num">' + f.carbs_per_100g + 'g</div><div class="macro-lbl">Gluc</div></div>' +
+          '<div class="macro-item"><div class="macro-num">' + f.fat_per_100g + 'g</div><div class="macro-lbl">Lip</div></div>' +
+          '<div class="macro-item"><div class="macro-num">' + f.kcal_per_100g + '</div><div class="macro-lbl">Kcal</div></div>' +
+        '</div>' +
+        (f.unit_label ? '<div class="food-unit">1 ' + esc(f.unit_label) + ' ≈ ' + f.unit_weight + 'g</div>' : '');
       wrap.appendChild(card);
     });
   }
