@@ -22,7 +22,7 @@
       <button type="button" data-mode="signup">Créer un compte</button>
     </div>
 
-    <form id="auth-form">
+    <form id="auth-form" action="javascript:void(0)" onsubmit="return false;">
       <div class="auth-field" id="name-field" style="display:none;">
         <label class="field-label">Nom complet</label>
         <input class="field-input" id="full-name" type="text" autocomplete="name">
@@ -50,7 +50,7 @@
       <div id="forgot-link" style="text-align:right;margin:-8px 0 14px;">
         <a href="#" id="forgot-password" style="font-size:12px;color:var(--text-faint);">Mot de passe oublié ?</a>
       </div>
-      <button type="submit" class="btn" id="submit-btn" style="width:100%;">Se connecter</button>
+      <button type="button" class="btn" id="submit-btn" style="width:100%;">Se connecter</button>
       <div class="auth-error" id="auth-error"></div>
     </form>
   </div>
@@ -105,12 +105,12 @@
     window.location.href = (profile && profile.role === 'coach') ? 'coach.html' : 'student.html';
   }
 
-  document.getElementById('auth-form').addEventListener('submit', async function(e){
-    e.preventDefault();
+  async function handleAuthSubmit(){
+    const submitBtn = document.getElementById('submit-btn');
+    if (submitBtn.disabled) return;
     showError('');
     const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value.trim();
-    const submitBtn = document.getElementById('submit-btn');
     submitBtn.disabled = true;
 
     try {
@@ -138,6 +138,11 @@
     } finally {
       submitBtn.disabled = false;
     }
+  }
+
+  document.getElementById('submit-btn').addEventListener('click', handleAuthSubmit);
+  document.getElementById('password').addEventListener('keydown', function(e){
+    if (e.key === 'Enter') { e.preventDefault(); handleAuthSubmit(); }
   });
 
   // If already logged in, skip straight to the right dashboard
