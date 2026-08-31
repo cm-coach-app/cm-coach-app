@@ -384,12 +384,12 @@
     let html = '';
     (meals || []).forEach(function(m){
       html += '<div class="meal-block" data-meal-id="' + m.id + '" style="margin-bottom:12px;padding:10px;background:var(--surface-3);border-radius:10px;">' +
-        '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">' + esc(m.name) + '</div>' +
+        '<div style="font-weight:600;font-size:13px;margin-bottom:8px;">' + esc(m.name) + '</div>' +
         '<div class="meal-items" data-meal-id="' + m.id + '"></div>' +
-        '<div class="mini-form" style="margin-top:8px;">' +
-        '<select class="mini-input new-item-food"></select>' +
-        '<input class="mini-input new-item-qty" type="number" placeholder="g" style="width:70px;">' +
-        '<button class="btn add-item-btn" style="padding:7px 14px;font-size:12px;">+</button>' +
+        '<div class="mini-form" style="margin-top:10px;align-items:flex-end;">' +
+        '<div class="mini-field" style="flex:1;min-width:140px;"><label>Aliment</label><select class="mini-input new-item-food"></select></div>' +
+        '<div class="mini-field"><label>Grammage (g)</label><input class="mini-input new-item-qty" type="number" placeholder="150" style="width:80px;"></div>' +
+        '<button class="btn add-item-btn" style="padding:8px 16px;font-size:12px;">+ Ajouter</button>' +
         '</div></div>';
     });
     html += '<div class="mini-form">' +
@@ -445,10 +445,35 @@
       const factor = it.quantity_grams / 100;
       const p = f.protein_per_100g * factor, g = f.carbs_per_100g * factor, l = f.fat_per_100g * factor, kcal = f.kcal_per_100g * factor;
       totals.p += p; totals.g += g; totals.l += l; totals.kcal += kcal;
-      html += '<div class="row" style="font-size:12.5px;padding:6px 0;"><div style="flex:1;">' + esc(f.name) + '</div><div style="width:50px;color:var(--text-dim);">' + it.quantity_grams + 'g</div><div style="width:90px;text-align:right;color:var(--text-dim);">' + kcal.toFixed(0) + ' kcal</div></div>';
+      html += '<div class="row" style="font-size:12.5px;padding:6px 0;gap:8px;">' +
+        '<div style="flex:1;">' + esc(f.name) + '</div>' +
+        '<input class="mini-input item-qty" data-item="' + it.id + '" type="number" value="' + it.quantity_grams + '" style="width:60px;text-align:center;">' +
+        '<span style="color:var(--text-faint);">g</span>' +
+        '<div style="width:70px;text-align:right;color:var(--text-dim);">' + kcal.toFixed(0) + ' kcal</div>' +
+        '<button class="del-item-btn" data-item="' + it.id + '" title="Supprimer" style="background:none;border:none;color:var(--warn);cursor:pointer;font-size:17px;line-height:1;padding:2px 4px;">×</button>' +
+      '</div>';
     });
     html += '<div class="row" style="font-weight:600;font-size:12px;padding-top:6px;"><div style="flex:1;">Total</div><div style="text-align:right;">' + totals.p.toFixed(1) + 'P · ' + totals.g.toFixed(1) + 'G · ' + totals.l.toFixed(1) + 'L · ' + totals.kcal.toFixed(0) + ' kcal</div></div>';
     el.innerHTML = html;
+
+    el.querySelectorAll('.item-qty').forEach(function(input){
+      input.addEventListener('change', async function(){
+        const newQty = parseFloat(this.value);
+        if (isNaN(newQty) || newQty <= 0) { toast('Grammage invalide.', true); return; }
+        const { error } = await supabaseClient.from('meal_items').update({ quantity_grams: newQty }).eq('id', this.dataset.item);
+        if (error) { toast(error.message, true); return; }
+        await renderMealItems(el, mealId);
+      });
+    });
+
+    el.querySelectorAll('.del-item-btn').forEach(function(btn){
+      btn.addEventListener('click', async function(){
+        const { error } = await supabaseClient.from('meal_items').delete().eq('id', btn.dataset.item);
+        if (error) { toast(error.message, true); return; }
+        toast('Aliment retiré.');
+        await renderMealItems(el, mealId);
+      });
+    });
   }
 
   // ---- Aliments (coach library) ----
