@@ -95,9 +95,22 @@
       </div>
     </div>
 
-    <div id="view-placeholder" style="display:none;">
-      <h1 class="page-title" id="placeholder-title">—</h1>
-      <div class="card empty-note">Cette section arrive dans une prochaine mise à jour — ton coach est en train de la connecter à tes vraies données.</div>
+    <div id="view-entrainement" style="display:none;">
+      <h1 class="page-title">Entraînement</h1>
+      <p class="page-sub" id="prog-sub">—</p>
+      <div id="entrainement-content"><div class="empty-note">Chargement…</div></div>
+    </div>
+
+    <div id="view-diete" style="display:none;">
+      <h1 class="page-title">Diète</h1>
+      <p class="page-sub">Préparée par ton coach — lecture seule</p>
+      <div id="diete-content"><div class="empty-note">Chargement…</div></div>
+    </div>
+
+    <div id="view-aliments" style="display:none;">
+      <h1 class="page-title">Ma bibliothèque d'aliments</h1>
+      <p class="page-sub">Ce que ton coach utilise, et pourquoi</p>
+      <div id="aliments-content" class="stat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));"><div class="empty-note">Chargement…</div></div>
     </div>
   </main>
 </div>
@@ -119,15 +132,17 @@
   function fmt1(n){ return Number(n).toFixed(1); }
 
   // ---- Navigation ----
-  const VIEW_TITLES = { entrainement: 'Entraînement', diete: 'Diète', aliments: 'Aliments' };
+  const VIEWS = ['poids', 'entrainement', 'diete', 'aliments'];
+  let entrainementLoaded = false, dieteLoaded = false, alimentsLoaded = false;
   document.querySelectorAll('.nav-item[data-view]').forEach(function(item){
     item.addEventListener('click', function(){
       document.querySelectorAll('.nav-item[data-view]').forEach(function(n){ n.classList.remove('active'); });
       item.classList.add('active');
       const view = item.dataset.view;
-      document.getElementById('view-poids').style.display = view === 'poids' ? 'block' : 'none';
-      document.getElementById('view-placeholder').style.display = view === 'poids' ? 'none' : 'block';
-      if (view !== 'poids') document.getElementById('placeholder-title').textContent = VIEW_TITLES[view];
+      VIEWS.forEach(function(v){ document.getElementById('view-' + v).style.display = (v === view) ? 'block' : 'none'; });
+      if (view === 'entrainement' && !entrainementLoaded) { entrainementLoaded = true; loadEntrainement(); }
+      if (view === 'diete' && !dieteLoaded) { dieteLoaded = true; loadDiete(); }
+      if (view === 'aliments' && !alimentsLoaded) { alimentsLoaded = true; loadAliments(); }
     });
   });
 
@@ -230,6 +245,159 @@
     await loadWeightData();
   });
 
+  function esc(s){ return (s == null ? '' : String(s)).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+  let myCoachId = null;
+
+  // ---- Entraînement (élève) ----
+  let currentSessionId = null;
+  let currentWeek = 1;
+
+  function currentWeekFor(program){
+    const days = Math.floor((Date.now() - new Date(program.start_date + 'T00:00:00')) / 86400000);
+    return Math.max(1, Math.min(12, Math.floor(days / 7) + 1));
+  }
+
+  async function loadEntrainement(){
+    const el = document.getElementById('entrainement-content');
+    const { data: program } = await supabaseClient.from('programs').select('*').eq('student_id', studentId).eq('is_archived', false).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (!program) {
+      document.getElementById('prog-sub').textContent = 'Aucun programme actif pour l\'instant';
+      el.innerHTML = '<div class="card empty-note">Ton coach n\'a pas encore créé ton programme.</div>';
+      return;
+    }
+    document.getElementById('prog-sub').textContent = program.name;
+    currentWeek = currentWeekFor(program);
+
+    const { data: sessions } = await supabaseClient.from('sessions').select('*').eq('program_id', program.id).order('day_order', { ascending: true });
+    if (!sessions || !sessions.length) {
+      el.innerHTML = '<div class="card empty-note">Aucune séance pour l\'instant.</div>';
+      return;
+    }
+    currentSessionId = sessions[0].id;
+
+    let html = '<div class="mini-form" style="margin-bottom:16px;" id="sess-tabs">';
+    sessions.forEach(function(s){
+      html += '<div class="tag" data-sess="' + s.id + '" style="cursor:pointer;' + (s.id === currentSessionId ? 'background:var(--accent);color:#191506;' : '') + '">' + esc(s.name) + '</div>';
+    });
+    html += '</div>';
+    html += '<div class="week-chips mini-form" id="week-chips" style="margin-bottom:20px;"></div>';
+    html += '<div id="exercise-list"></div>';
+    el.innerHTML = html;
+
+    const weekWrap = document.getElementById('week-chips');
+    for (let w = 1; w <= 12; w++) {
+      const chip = document.createElement('div');
+      chip.className = 'tag';
+      chip.style.cursor = 'pointer';
+      if (w === currentWeek) { chip.style.background = 'var(--accent)'; chip.style.color = '#191506'; }
+      chip.textContent = 'S' + w;
+      chip.dataset.week = w;
+      chip.addEventListener('click', function(){ currentWeek = w; loadEntrainement2(); });
+      weekWrap.appendChild(chip);
+    }
+
+    el.querySelectorAll('#sess-tabs [data-sess]').forEach(function(tag){
+      tag.addEventListener('click', function(){ currentSessionId = tag.dataset.sess; renderExerciseLog(); });
+    });
+
+    await renderExerciseLog();
+
+    function loadEntrainement2(){ loadEntrainement(); } // week change needs full reload to restyle chips
+  }
+
+  async function renderExerciseLog(){
+    const el = document.getElementById('exercise-list');
+    if (!el) return;
+    el.innerHTML = '<div class="empty-note">Chargement…</div>';
+    const { data: exercises } = await supabaseClient.from('exercises').select('*').eq('session_id', currentSessionId).order('exercise_order', { ascending: true });
+    const { data: logs } = await supabaseClient.from('exercise_logs').select('*').in('exercise_id', (exercises || []).map(function(e){ return e.id; })).eq('week', currentWeek);
+
+    let html = '';
+    (exercises || []).forEach(function(ex){
+      const target = (ex.target_reps || '?') + ' × ' + (ex.target_charge != null ? ex.target_charge + ' kg' : '—');
+      html += '<div class="sub-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
+        '<b>' + esc(ex.name) + '</b><span class="tag">Cible : ' + target + '</span></div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;" data-ex="' + ex.id + '">';
+      for (let s = 1; s <= 4; s++) {
+        const existing = (logs || []).find(function(l){ return l.exercise_id === ex.id && l.series === s; });
+        html += '<div style="background:var(--surface-3);border-radius:8px;padding:8px;">' +
+          '<div style="font-size:10px;color:var(--text-faint);text-transform:uppercase;margin-bottom:6px;">Série ' + s + '</div>' +
+          '<input class="mini-input log-reps" data-series="' + s + '" type="number" placeholder="reps" value="' + (existing ? existing.reps : '') + '" style="width:56px;text-align:center;margin-bottom:4px;">' +
+          '<input class="mini-input log-charge" data-series="' + s + '" type="number" step="0.5" placeholder="kg" value="' + (existing ? existing.charge : '') + '" style="width:56px;text-align:center;">' +
+          '</div>';
+      }
+      html += '</div><button class="btn save-log-btn" data-ex="' + ex.id + '" style="margin-top:10px;padding:8px 16px;font-size:12.5px;">Enregistrer</button></div>';
+    });
+    if (!exercises || !exercises.length) html = '<div class="empty-note">Aucun exercice dans cette séance.</div>';
+    el.innerHTML = html;
+
+    el.querySelectorAll('.save-log-btn').forEach(function(btn){
+      btn.addEventListener('click', async function(){
+        const exId = btn.dataset.ex;
+        const block = el.querySelector('[data-ex="' + exId + '"]');
+        const rows = [];
+        for (let s = 1; s <= 4; s++) {
+          const repsInput = block.querySelector('.log-reps[data-series="' + s + '"]');
+          const chargeInput = block.querySelector('.log-charge[data-series="' + s + '"]');
+          const reps = repsInput.value === '' ? null : parseFloat(repsInput.value);
+          const charge = chargeInput.value === '' ? null : parseFloat(chargeInput.value);
+          if (reps !== null || charge !== null) rows.push({ exercise_id: exId, week: currentWeek, series: s, reps: reps, charge: charge });
+        }
+        if (!rows.length) return;
+        const { error } = await supabaseClient.from('exercise_logs').upsert(rows, { onConflict: 'exercise_id,week,series' });
+        if (error) toast(error.message, true); else toast('Séance enregistrée !');
+      });
+    });
+  }
+
+  // ---- Diète (élève, lecture seule) ----
+  async function loadDiete(){
+    const el = document.getElementById('diete-content');
+    const { data: program } = await supabaseClient.from('programs').select('*').eq('student_id', studentId).eq('is_archived', false).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (!program) { el.innerHTML = '<div class="card empty-note">Ton coach n\'a pas encore préparé ta diète.</div>'; return; }
+
+    const { data: days } = await supabaseClient.from('diet_days').select('*').eq('program_id', program.id);
+    if (!days || !days.length) { el.innerHTML = '<div class="card empty-note">Ton coach n\'a pas encore préparé ta diète.</div>'; return; }
+
+    let html = '';
+    for (const d of days) {
+      html += '<div class="card" style="margin-bottom:16px;"><h3 style="margin:0 0 12px;font-size:15px;">' + (d.day_type === 'training' ? "Jour d'entraînement" : 'Jour off') + '</h3>';
+      const { data: meals } = await supabaseClient.from('meals').select('*').eq('diet_day_id', d.id).order('meal_order', { ascending: true });
+      const dayTotals = { p: 0, g: 0, l: 0, kcal: 0 };
+      for (const m of (meals || [])) {
+        html += '<div style="margin-bottom:12px;"><div style="font-weight:600;font-size:13px;margin-bottom:6px;">' + esc(m.name) + '</div>';
+        const { data: items } = await supabaseClient.from('meal_items').select('*, foods(*)').eq('meal_id', m.id);
+        (items || []).forEach(function(it){
+          const f = it.foods;
+          const factor = it.quantity_grams / 100;
+          const kcal = f.kcal_per_100g * factor;
+          dayTotals.p += f.protein_per_100g * factor; dayTotals.g += f.carbs_per_100g * factor; dayTotals.l += f.fat_per_100g * factor; dayTotals.kcal += kcal;
+          html += '<div class="row" style="font-size:13px;"><div style="flex:1;">' + esc(f.name) + '</div><div style="width:60px;color:var(--text-dim);">' + it.quantity_grams + 'g</div><div style="width:80px;text-align:right;color:var(--text-dim);">' + kcal.toFixed(0) + ' kcal</div></div>';
+        });
+        html += '</div>';
+      }
+      html += '<div class="row" style="font-weight:600;">Total du jour<div style="flex:1;text-align:right;">' + dayTotals.p.toFixed(0) + 'g P · ' + dayTotals.g.toFixed(0) + 'g G · ' + dayTotals.l.toFixed(0) + 'g L · ' + dayTotals.kcal.toFixed(0) + ' kcal</div></div>';
+      html += '</div>';
+    }
+    el.innerHTML = html;
+  }
+
+  // ---- Aliments (élève, lecture seule) ----
+  async function loadAliments(){
+    const el = document.getElementById('aliments-content');
+    if (!myCoachId) { el.innerHTML = '<div class="empty-note">Bibliothèque non disponible.</div>'; return; }
+    const { data: foods } = await supabaseClient.from('foods').select('*').eq('coach_id', myCoachId).order('name', { ascending: true });
+    if (!foods || !foods.length) { el.innerHTML = '<div class="empty-note">Ton coach n\'a pas encore ajouté d\'aliments.</div>'; return; }
+    let html = '';
+    foods.forEach(function(f){
+      html += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><b>' + esc(f.name) + '</b><span class="tag">' + esc(f.category || '') + '</span></div>' +
+        (f.benefit_note ? '<p style="font-size:12.5px;color:var(--text-dim);line-height:1.5;margin:0 0 10px;">' + esc(f.benefit_note) + '</p>' : '') +
+        '<div style="font-size:12px;color:var(--text-faint);">' + f.protein_per_100g + 'g P · ' + f.carbs_per_100g + 'g G · ' + f.fat_per_100g + 'g L · ' + f.kcal_per_100g + ' kcal /100g</div></div>';
+    });
+    el.innerHTML = html;
+  }
+
   // ---- Boot ----
   (async function(){
     const { data: { session } } = await supabaseClient.auth.getSession();
@@ -243,6 +411,7 @@
     const name = (profile && profile.full_name) || currentUser.email;
     document.getElementById('student-name').textContent = name;
     document.getElementById('avatar-initials').textContent = name.slice(0, 2).toUpperCase();
+    myCoachId = profile && profile.coach_id;
 
     await loadWeightData();
   })();

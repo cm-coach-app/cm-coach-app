@@ -17,9 +17,13 @@
       <div class="brand-name">CM COACH</div>
     </div>
     <nav class="nav">
-      <div class="nav-item active">
+      <div class="nav-item active" data-view="eleves">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.6 2.7-6.2 6-6.2s6 2.6 6 6.2"/><circle cx="17.3" cy="9" r="2.3"/><path d="M15.6 14c2.2.5 3.7 2.5 3.7 6"/></svg>
         Élèves
+      </div>
+      <div class="nav-item" data-view="aliments">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5C4 11 10 4.5 20 3.5c-.6 9.6-7 15.7-15.5 16z"/><path d="M4.7 19.3 14 10"/></svg>
+        Aliments
       </div>
     </nav>
     <div class="sidebar-foot">
@@ -32,18 +36,56 @@
   </aside>
 
   <main class="main">
-    <h1 class="page-title">Élèves</h1>
-    <p class="page-sub">Sélectionne un élève pour voir son suivi</p>
+    <div id="view-eleves">
+      <h1 class="page-title">Élèves</h1>
+      <p class="page-sub">Sélectionne un élève pour voir et construire son suivi</p>
 
-    <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
-      <div class="card" style="width:272px;flex:none;padding:14px;">
-        <div id="roster-list"></div>
-        <div id="roster-empty" class="empty-note" style="display:none;padding:16px 6px 4px;">Aucun élève inscrit pour l'instant. Partage-leur le lien de connexion pour qu'ils créent leur compte "élève".</div>
+      <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
+        <div class="card" style="width:272px;flex:none;padding:14px;">
+          <div id="roster-list"></div>
+          <div id="roster-empty" class="empty-note" style="display:none;padding:16px 6px 4px;">Aucun élève inscrit pour l'instant. Partage-leur le lien de connexion pour qu'ils créent leur compte "élève".</div>
+        </div>
+
+        <div class="card" style="flex:1;min-width:280px;" id="student-panel">
+          <div class="empty-note">Choisis un élève dans la liste pour voir son suivi.</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-aliments" style="display:none;">
+      <h1 class="page-title">Bibliothèque d'aliments</h1>
+      <p class="page-sub">Utilisée pour construire les diètes de tes élèves</p>
+
+      <div class="card" style="margin-bottom:20px;">
+        <h3 style="margin:0 0 14px;font-size:14px;">Ajouter un aliment</h3>
+        <div class="mini-form" style="margin-bottom:12px;">
+          <div class="mini-field" style="flex:2;min-width:160px;"><label>Nom</label><input id="f-name" placeholder="Ex: Riz basmati (cru)"></div>
+          <div class="mini-field"><label>Catégorie</label>
+            <select id="f-category">
+              <option value="Protéine">Protéine</option>
+              <option value="Féculent">Féculent</option>
+              <option value="Matière grasse">Matière grasse</option>
+              <option value="Légume">Légume</option>
+              <option value="Autre">Autre</option>
+            </select>
+          </div>
+        </div>
+        <div class="mini-form" style="margin-bottom:12px;">
+          <div class="mini-field"><label>Prot /100g</label><input id="f-p" type="number" step="0.1" style="width:80px;"></div>
+          <div class="mini-field"><label>Gluc /100g</label><input id="f-g" type="number" step="0.1" style="width:80px;"></div>
+          <div class="mini-field"><label>Lip /100g</label><input id="f-l" type="number" step="0.1" style="width:80px;"></div>
+          <div class="mini-field"><label>Kcal /100g</label><input id="f-kcal" type="number" step="1" style="width:80px;"></div>
+          <div class="mini-field"><label>Unité (optionnel)</label><input id="f-unit-label" placeholder="Ex: œuf" style="width:100px;"></div>
+          <div class="mini-field"><label>Poids/unité (g)</label><input id="f-unit-weight" type="number" style="width:100px;"></div>
+        </div>
+        <div class="mini-field" style="margin-bottom:12px;">
+          <label>Pourquoi cet aliment est bon pour la santé</label>
+          <textarea id="f-note" rows="2" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;resize:vertical;"></textarea>
+        </div>
+        <button class="btn" id="add-food-btn">+ Ajouter l'aliment</button>
       </div>
 
-      <div class="card" style="flex:1;min-width:280px;" id="student-panel">
-        <div class="empty-note">Choisis un élève dans la liste pour voir son suivi de poids.</div>
-      </div>
+      <div id="foods-list"></div>
     </div>
   </main>
 </div>
@@ -55,6 +97,8 @@
   let coachId = null;
   let students = [];
   let selectedId = null;
+  let activeTab = 'poids';
+  let coachFoods = [];
 
   function toast(msg, isErr){
     const t = document.getElementById('toast');
@@ -63,12 +107,29 @@
     setTimeout(function(){ t.className = 'toast'; }, 3000);
   }
   function fmt1(n){ return Number(n).toFixed(1); }
+  function esc(s){ return (s == null ? '' : String(s)).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function statTile(label, value, accent){
+    return '<div class="stat-tile"><div class="stat-label">' + label + '</div><div class="stat-value"' + (accent ? ' style="color:var(--accent);"' : '') + '>' + value + '</div></div>';
+  }
 
   document.getElementById('logout-btn').addEventListener('click', async function(){
     await supabaseClient.auth.signOut();
     window.location.href = 'index.html';
   });
 
+  // ---- Top-level nav: Élèves / Aliments ----
+  document.querySelectorAll('.nav-item[data-view]').forEach(function(item){
+    item.addEventListener('click', function(){
+      document.querySelectorAll('.nav-item[data-view]').forEach(function(n){ n.classList.remove('active'); });
+      item.classList.add('active');
+      const view = item.dataset.view;
+      document.getElementById('view-eleves').style.display = view === 'eleves' ? 'block' : 'none';
+      document.getElementById('view-aliments').style.display = view === 'aliments' ? 'block' : 'none';
+      if (view === 'aliments') renderAlimentsView();
+    });
+  });
+
+  // ---- Roster ----
   function renderRoster(){
     const wrap = document.getElementById('roster-list');
     wrap.innerHTML = '';
@@ -77,40 +138,64 @@
       const el = document.createElement('div');
       el.className = 'roster-item' + (s.id === selectedId ? ' active' : '');
       const initials = (s.full_name || '??').slice(0, 2).toUpperCase();
-      el.innerHTML = '<div class="avatar">' + initials + '</div><div><div class="roster-name">' + (s.full_name || 'Élève') + '</div></div>';
+      el.innerHTML = '<div class="avatar">' + initials + '</div><div><div class="roster-name">' + esc(s.full_name || 'Élève') + '</div></div>';
       el.addEventListener('click', function(){ selectStudent(s.id); });
       wrap.appendChild(el);
     });
   }
 
-  async function selectStudent(id){
+  function selectStudent(id){
     selectedId = id;
+    activeTab = 'poids';
     renderRoster();
-    const panel = document.getElementById('student-panel');
-    panel.innerHTML = '<div class="empty-note">Chargement…</div>';
+    renderStudentPanel();
+  }
 
-    const student = students.find(function(s){ return s.id === id; });
-    const { data: goals } = await supabaseClient.from('weight_goals').select('*').eq('student_id', id).maybeSingle();
-    const { data: entries } = await supabaseClient.from('weight_entries').select('*').eq('student_id', id).order('entry_date', { ascending: true });
+  function renderStudentPanel(){
+    const student = students.find(function(s){ return s.id === selectedId; });
+    const panel = document.getElementById('student-panel');
+    panel.innerHTML =
+      '<h3 style="margin:0 0 16px;font-size:18px;">' + esc(student.full_name || 'Élève') + '</h3>' +
+      '<div class="tab-bar">' +
+        '<div class="tab' + (activeTab === 'poids' ? ' active' : '') + '" data-tab="poids">Poids</div>' +
+        '<div class="tab' + (activeTab === 'entrainement' ? ' active' : '') + '" data-tab="entrainement">Entraînement</div>' +
+        '<div class="tab' + (activeTab === 'diete' ? ' active' : '') + '" data-tab="diete">Diète</div>' +
+      '</div>' +
+      '<div id="tab-content"><div class="empty-note">Chargement…</div></div>';
+    panel.querySelectorAll('.tab').forEach(function(t){
+      t.addEventListener('click', function(){ activeTab = t.dataset.tab; renderStudentPanel(); });
+    });
+    loadTabContent();
+  }
+
+  async function loadTabContent(){
+    const el = document.getElementById('tab-content');
+    if (activeTab === 'poids') await loadPoidsTab(el);
+    else if (activeTab === 'entrainement') await loadEntrainementTab(el);
+    else await loadDieteTab(el);
+  }
+
+  // ---- Poids tab ----
+  async function loadPoidsTab(el){
+    const { data: goals } = await supabaseClient.from('weight_goals').select('*').eq('student_id', selectedId).maybeSingle();
+    const { data: entries } = await supabaseClient.from('weight_entries').select('*').eq('student_id', selectedId).order('entry_date', { ascending: true });
     const history = entries || [];
 
-    let html = '<h3 style="margin:0 0 20px;font-size:18px;">' + (student.full_name || 'Élève') + '</h3>';
-
     if (!goals) {
-      html += '<div style="margin-bottom:8px;font-size:13px;color:var(--text-dim);">Aucun objectif défini pour cet élève.</div>';
-      html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;">';
-      html += '<div style="flex:1;min-width:120px;"><label class="field-label">Poids de départ (kg)</label><input class="field-input" id="c-goal-start" type="number" step="0.1"></div>';
-      html += '<div style="flex:1;min-width:120px;"><label class="field-label">Poids objectif (kg)</label><input class="field-input" id="c-goal-target" type="number" step="0.1"></div>';
-      html += '</div><button class="btn" id="c-save-goals">Définir l\'objectif</button>';
-      panel.innerHTML = html;
+      el.innerHTML =
+        '<div style="margin-bottom:8px;font-size:13px;color:var(--text-dim);">Aucun objectif défini pour cet élève.</div>' +
+        '<div class="mini-form" style="margin-bottom:14px;">' +
+          '<div class="mini-field"><label>Poids de départ (kg)</label><input id="c-goal-start" type="number" step="0.1" style="width:120px;"></div>' +
+          '<div class="mini-field"><label>Poids objectif (kg)</label><input id="c-goal-target" type="number" step="0.1" style="width:120px;"></div>' +
+        '</div><button class="btn" id="c-save-goals">Définir l\'objectif</button>';
       document.getElementById('c-save-goals').addEventListener('click', async function(){
         const start = parseFloat(document.getElementById('c-goal-start').value);
         const target = parseFloat(document.getElementById('c-goal-target').value);
         if (isNaN(start) || isNaN(target)) { toast('Remplis les deux poids.', true); return; }
-        const { error } = await supabaseClient.from('weight_goals').insert({ student_id: id, start_weight: start, goal_weight: target });
+        const { error } = await supabaseClient.from('weight_goals').insert({ student_id: selectedId, start_weight: start, goal_weight: target });
         if (error) { toast(error.message, true); return; }
         toast('Objectif défini.');
-        selectStudent(id);
+        loadTabContent();
       });
       return;
     }
@@ -120,11 +205,11 @@
     const totalToLose = goals.start_weight - goals.goal_weight;
     const pct = totalToLose !== 0 ? Math.max(0, Math.min(100, (perte / totalToLose) * 100)) : 0;
 
-    html += '<div class="stat-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:20px;">';
-    html += '<div class="stat-tile"><div class="stat-label">Objectif</div><div class="stat-value">' + fmt1(goals.goal_weight) + ' kg</div></div>';
-    html += '<div class="stat-tile"><div class="stat-label">Actuel</div><div class="stat-value">' + fmt1(current) + ' kg</div></div>';
-    html += '<div class="stat-tile"><div class="stat-label">Perte totale</div><div class="stat-value" style="color:var(--accent);">' + (perte >= 0 ? '-' : '+') + fmt1(Math.abs(perte)) + ' kg</div></div>';
-    html += '<div class="stat-tile"><div class="stat-label">Objectif atteint</div><div class="stat-value">' + Math.round(pct) + ' %</div></div>';
+    let html = '<div class="stat-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:20px;">';
+    html += statTile('Objectif', fmt1(goals.goal_weight) + ' kg');
+    html += statTile('Actuel', fmt1(current) + ' kg');
+    html += statTile('Perte totale', (perte >= 0 ? '-' : '+') + fmt1(Math.abs(perte)) + ' kg', true);
+    html += statTile('Objectif atteint', Math.round(pct) + ' %');
     html += '</div>';
 
     if (history.length) {
@@ -135,10 +220,285 @@
     } else {
       html += '<div class="empty-note" style="padding:12px 0;">Aucune pesée enregistrée pour l\'instant.</div>';
     }
-
-    panel.innerHTML = html;
+    el.innerHTML = html;
   }
 
+  // ---- Shared: active program ----
+  async function getActiveProgram(studentId){
+    const { data } = await supabaseClient.from('programs').select('*').eq('student_id', studentId).eq('is_archived', false).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    return data;
+  }
+
+  // ---- Entraînement tab ----
+  async function loadEntrainementTab(el){
+    const program = await getActiveProgram(selectedId);
+    if (!program) {
+      el.innerHTML =
+        '<div style="margin-bottom:12px;font-size:13px;color:var(--text-dim);">Aucun programme actif pour cet élève.</div>' +
+        '<div class="mini-form"><div class="mini-field" style="flex:1;min-width:200px;"><label>Nom du programme</label><input id="new-prog-name" placeholder="Ex: Recomposition — cycle 1"></div>' +
+        '<button class="btn" id="create-prog-btn">Créer le programme</button></div>';
+      document.getElementById('create-prog-btn').addEventListener('click', async function(){
+        const name = document.getElementById('new-prog-name').value.trim();
+        if (!name) { toast('Donne un nom au programme.', true); return; }
+        const { error } = await supabaseClient.from('programs').insert({ student_id: selectedId, name: name });
+        if (error) { toast(error.message, true); return; }
+        toast('Programme créé.');
+        loadTabContent();
+      });
+      return;
+    }
+
+    const { data: sessions } = await supabaseClient.from('sessions').select('*').eq('program_id', program.id).order('day_order', { ascending: true });
+
+    let html = '<div style="margin-bottom:14px;"><div style="font-weight:600;">' + esc(program.name) + '</div><div style="font-size:11.5px;color:var(--text-faint);">Débuté le ' + program.start_date + '</div></div>';
+    html += '<div id="sessions-list"></div>';
+    html += '<div class="mini-form" style="margin-top:14px;">' +
+      '<div class="mini-field" style="flex:1;min-width:160px;"><label>Nom de la séance</label><input id="new-sess-name" placeholder="Ex: Jour 1 — Bas du corps"></div>' +
+      '<div class="mini-field"><label>Ordre</label><input id="new-sess-order" type="number" style="width:70px;" value="' + ((sessions && sessions.length || 0) + 1) + '"></div>' +
+      '<div class="mini-field"><label>Format</label><select id="new-sess-format"><option value="strength">Musculation</option><option value="circuit">Circuit</option></select></div>' +
+      '<button class="btn" id="add-sess-btn">+ Ajouter</button></div>';
+    el.innerHTML = html;
+
+    const sessionsList = document.getElementById('sessions-list');
+    if (!sessions || !sessions.length) {
+      sessionsList.innerHTML = '<div class="empty-note" style="padding:8px 0;">Aucune séance pour l\'instant.</div>';
+    } else {
+      sessions.forEach(function(s){
+        const card = document.createElement('div');
+        card.className = 'sub-card';
+        card.innerHTML =
+          '<div class="sess-head" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">' +
+            '<div><b>' + esc(s.name) + '</b> <span style="color:var(--text-faint);font-size:11.5px;">· ' + (s.format === 'circuit' ? 'Circuit' : 'Musculation') + '</span></div>' +
+            '<svg class="chev-btn" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>' +
+          '</div><div class="sess-body" style="display:none;margin-top:12px;"></div>';
+        sessionsList.appendChild(card);
+        const head = card.querySelector('.sess-head');
+        const body = card.querySelector('.sess-body');
+        head.addEventListener('click', async function(){
+          const isOpen = body.style.display !== 'none';
+          body.style.display = isOpen ? 'none' : 'block';
+          head.classList.toggle('open', !isOpen);
+          if (!isOpen) await renderExercises(body, s);
+        });
+      });
+    }
+
+    document.getElementById('add-sess-btn').addEventListener('click', async function(){
+      const name = document.getElementById('new-sess-name').value.trim();
+      const order = parseInt(document.getElementById('new-sess-order').value, 10) || 1;
+      const format = document.getElementById('new-sess-format').value;
+      if (!name) { toast('Donne un nom à la séance.', true); return; }
+      const { error } = await supabaseClient.from('sessions').insert({ program_id: program.id, name: name, day_order: order, format: format });
+      if (error) { toast(error.message, true); return; }
+      toast('Séance ajoutée.');
+      loadTabContent();
+    });
+  }
+
+  async function renderExercises(body, session){
+    const { data: exercises } = await supabaseClient.from('exercises').select('*').eq('session_id', session.id).order('exercise_order', { ascending: true });
+    let html = '';
+    (exercises || []).forEach(function(ex){
+      html += '<div class="row" style="align-items:center;">' +
+        '<div style="flex:1;">' + esc(ex.name) + '</div>' +
+        '<input class="mini-input ex-reps" data-id="' + ex.id + '" type="number" value="' + (ex.target_reps || '') + '" placeholder="reps" style="width:64px;text-align:center;">' +
+        '<input class="mini-input ex-charge" data-id="' + ex.id + '" type="number" step="0.5" value="' + (ex.target_charge || '') + '" placeholder="kg" style="width:70px;text-align:center;margin-left:8px;">' +
+      '</div>';
+    });
+    html += '<div class="mini-form" style="margin-top:10px;">' +
+      '<div class="mini-field" style="flex:1;min-width:140px;"><label>Exercice</label><input class="new-ex-name" placeholder="Ex: Presse à cuisses"></div>' +
+      '<div class="mini-field"><label>Reps cible</label><input class="new-ex-reps" type="number" style="width:70px;"></div>' +
+      '<div class="mini-field"><label>Charge (kg)</label><input class="new-ex-charge" type="number" step="0.5" style="width:80px;"></div>' +
+      '<button class="btn add-ex-btn" style="padding:9px 16px;">+ Ajouter</button></div>';
+    body.innerHTML = html;
+
+    body.querySelectorAll('.ex-reps, .ex-charge').forEach(function(input){
+      input.addEventListener('change', async function(){
+        const id = this.dataset.id;
+        const field = this.classList.contains('ex-reps') ? 'target_reps' : 'target_charge';
+        const val = this.value === '' ? null : parseFloat(this.value);
+        const payload = {};
+        payload[field] = val;
+        const { error } = await supabaseClient.from('exercises').update(payload).eq('id', id);
+        if (error) toast(error.message, true); else toast('Mis à jour.');
+      });
+    });
+
+    body.querySelector('.add-ex-btn').addEventListener('click', async function(){
+      const name = body.querySelector('.new-ex-name').value.trim();
+      const reps = parseInt(body.querySelector('.new-ex-reps').value, 10) || null;
+      const charge = parseFloat(body.querySelector('.new-ex-charge').value) || null;
+      if (!name) { toast('Donne un nom à l\'exercice.', true); return; }
+      const order = (exercises ? exercises.length : 0) + 1;
+      const { error } = await supabaseClient.from('exercises').insert({ session_id: session.id, name: name, exercise_order: order, target_reps: reps, target_charge: charge });
+      if (error) { toast(error.message, true); return; }
+      toast('Exercice ajouté.');
+      await renderExercises(body, session);
+    });
+  }
+
+  // ---- Diète tab ----
+  async function loadDieteTab(el){
+    const program = await getActiveProgram(selectedId);
+    if (!program) {
+      el.innerHTML = '<div class="empty-note">Crée d\'abord un programme dans l\'onglet Entraînement.</div>';
+      return;
+    }
+    if (!coachFoods.length) await loadCoachFoods();
+    if (!coachFoods.length) {
+      el.innerHTML = '<div class="empty-note">Ajoute d\'abord des aliments dans la bibliothèque (menu "Aliments" à gauche) avant de construire une diète.</div>';
+      return;
+    }
+
+    const { data: days } = await supabaseClient.from('diet_days').select('*').eq('program_id', program.id).order('id', { ascending: true });
+
+    el.innerHTML = '<div id="diet-days"></div>' +
+      '<div class="mini-form" style="margin-top:10px;">' +
+      '<div class="mini-field"><label>Type de jour</label><select id="new-day-type"><option value="training">Jour d\'entraînement</option><option value="off">Jour off</option></select></div>' +
+      '<button class="btn" id="add-day-btn">+ Ajouter un jour</button></div>';
+
+    const daysWrap = document.getElementById('diet-days');
+    if (!days || !days.length) {
+      daysWrap.innerHTML = '<div class="empty-note" style="padding:8px 0;">Aucun jour de diète pour l\'instant.</div>';
+    } else {
+      for (const d of days) {
+        const card = document.createElement('div');
+        card.className = 'sub-card';
+        card.innerHTML = '<div style="font-weight:600;margin-bottom:10px;">' + (d.day_type === 'training' ? "Jour d'entraînement" : 'Jour off') + '</div><div class="meals-wrap"></div>';
+        daysWrap.appendChild(card);
+        await renderMeals(card.querySelector('.meals-wrap'), d);
+      }
+    }
+
+    document.getElementById('add-day-btn').addEventListener('click', async function(){
+      const type = document.getElementById('new-day-type').value;
+      const { error } = await supabaseClient.from('diet_days').insert({ program_id: program.id, day_type: type });
+      if (error) { toast(error.message, true); return; }
+      toast('Jour ajouté.');
+      loadTabContent();
+    });
+  }
+
+  async function renderMeals(wrap, day){
+    const { data: meals } = await supabaseClient.from('meals').select('*').eq('diet_day_id', day.id).order('meal_order', { ascending: true });
+    let html = '';
+    (meals || []).forEach(function(m){
+      html += '<div class="meal-block" data-meal-id="' + m.id + '" style="margin-bottom:12px;padding:10px;background:var(--surface-3);border-radius:10px;">' +
+        '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">' + esc(m.name) + '</div>' +
+        '<div class="meal-items" data-meal-id="' + m.id + '"></div>' +
+        '<div class="mini-form" style="margin-top:8px;">' +
+        '<select class="mini-input new-item-food"></select>' +
+        '<input class="mini-input new-item-qty" type="number" placeholder="g" style="width:70px;">' +
+        '<button class="btn add-item-btn" style="padding:7px 14px;font-size:12px;">+</button>' +
+        '</div></div>';
+    });
+    html += '<div class="mini-form">' +
+      '<div class="mini-field" style="flex:1;min-width:140px;"><label>Nom du repas</label><input class="new-meal-name" placeholder="Ex: Matin"></div>' +
+      '<button class="btn add-meal-btn" style="padding:9px 16px;">+ Ajouter un repas</button></div>';
+    wrap.innerHTML = html;
+
+    wrap.querySelectorAll('.new-item-food').forEach(function(sel){
+      coachFoods.forEach(function(f){
+        const opt = document.createElement('option');
+        opt.value = f.id; opt.textContent = f.name;
+        sel.appendChild(opt);
+      });
+    });
+
+    for (const m of (meals || [])) {
+      const itemsEl = wrap.querySelector('.meal-items[data-meal-id="' + m.id + '"]');
+      await renderMealItems(itemsEl, m.id);
+    }
+
+    wrap.querySelectorAll('.add-item-btn').forEach(function(btn){
+      btn.addEventListener('click', async function(){
+        const block = btn.closest('.meal-block');
+        const mealId = block.dataset.mealId;
+        const foodId = block.querySelector('.new-item-food').value;
+        const qty = parseFloat(block.querySelector('.new-item-qty').value);
+        if (!foodId || isNaN(qty) || qty <= 0) { toast('Choisis un aliment et une quantité.', true); return; }
+        const { error } = await supabaseClient.from('meal_items').insert({ meal_id: mealId, food_id: foodId, quantity_grams: qty });
+        if (error) { toast(error.message, true); return; }
+        await renderMealItems(block.querySelector('.meal-items'), mealId);
+        block.querySelector('.new-item-qty').value = '';
+      });
+    });
+
+    const addMealBtn = wrap.querySelector('.add-meal-btn');
+    if (addMealBtn) addMealBtn.addEventListener('click', async function(){
+      const name = wrap.querySelector('.new-meal-name').value.trim();
+      if (!name) { toast('Donne un nom au repas.', true); return; }
+      const order = (meals ? meals.length : 0) + 1;
+      const { error } = await supabaseClient.from('meals').insert({ diet_day_id: day.id, name: name, meal_order: order });
+      if (error) { toast(error.message, true); return; }
+      toast('Repas ajouté.');
+      await renderMeals(wrap, day);
+    });
+  }
+
+  async function renderMealItems(el, mealId){
+    const { data: items } = await supabaseClient.from('meal_items').select('*, foods(*)').eq('meal_id', mealId);
+    const totals = { p: 0, g: 0, l: 0, kcal: 0 };
+    let html = '';
+    (items || []).forEach(function(it){
+      const f = it.foods;
+      const factor = it.quantity_grams / 100;
+      const p = f.protein_per_100g * factor, g = f.carbs_per_100g * factor, l = f.fat_per_100g * factor, kcal = f.kcal_per_100g * factor;
+      totals.p += p; totals.g += g; totals.l += l; totals.kcal += kcal;
+      html += '<div class="row" style="font-size:12.5px;padding:6px 0;"><div style="flex:1;">' + esc(f.name) + '</div><div style="width:50px;color:var(--text-dim);">' + it.quantity_grams + 'g</div><div style="width:90px;text-align:right;color:var(--text-dim);">' + kcal.toFixed(0) + ' kcal</div></div>';
+    });
+    html += '<div class="row" style="font-weight:600;font-size:12px;padding-top:6px;"><div style="flex:1;">Total</div><div style="text-align:right;">' + totals.p.toFixed(1) + 'P · ' + totals.g.toFixed(1) + 'G · ' + totals.l.toFixed(1) + 'L · ' + totals.kcal.toFixed(0) + ' kcal</div></div>';
+    el.innerHTML = html;
+  }
+
+  // ---- Aliments (coach library) ----
+  async function loadCoachFoods(){
+    const { data } = await supabaseClient.from('foods').select('*').eq('coach_id', coachId).order('name', { ascending: true });
+    coachFoods = data || [];
+  }
+
+  async function renderAlimentsView(){
+    await loadCoachFoods();
+    const wrap = document.getElementById('foods-list');
+    if (!coachFoods.length) {
+      wrap.innerHTML = '<div class="empty-note">Aucun aliment pour l\'instant — ajoute-en un ci-dessus.</div>';
+      return;
+    }
+    wrap.innerHTML = '';
+    coachFoods.forEach(function(f){
+      const card = document.createElement('div');
+      card.className = 'sub-card';
+      card.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:center;"><b>' + esc(f.name) + '</b><span class="tag">' + esc(f.category || '') + '</span></div>' +
+        (f.benefit_note ? '<div style="font-size:12px;color:var(--text-dim);margin:6px 0;">' + esc(f.benefit_note) + '</div>' : '') +
+        '<div style="font-size:12px;color:var(--text-faint);">' + f.protein_per_100g + 'g P · ' + f.carbs_per_100g + 'g G · ' + f.fat_per_100g + 'g L · ' + f.kcal_per_100g + ' kcal /100g' + (f.unit_label ? ' · 1 ' + esc(f.unit_label) + ' ≈ ' + f.unit_weight + 'g' : '') + '</div>';
+      wrap.appendChild(card);
+    });
+  }
+
+  document.getElementById('add-food-btn').addEventListener('click', async function(){
+    const name = document.getElementById('f-name').value.trim();
+    const category = document.getElementById('f-category').value;
+    const p = parseFloat(document.getElementById('f-p').value) || 0;
+    const g = parseFloat(document.getElementById('f-g').value) || 0;
+    const l = parseFloat(document.getElementById('f-l').value) || 0;
+    const kcal = parseFloat(document.getElementById('f-kcal').value) || 0;
+    const unitLabel = document.getElementById('f-unit-label').value.trim() || null;
+    const unitWeight = parseFloat(document.getElementById('f-unit-weight').value) || null;
+    const note = document.getElementById('f-note').value.trim() || null;
+    if (!name) { toast('Donne un nom à l\'aliment.', true); return; }
+    const { error } = await supabaseClient.from('foods').insert({
+      coach_id: coachId, name: name, category: category,
+      protein_per_100g: p, carbs_per_100g: g, fat_per_100g: l, kcal_per_100g: kcal,
+      unit_label: unitLabel, unit_weight: unitWeight, benefit_note: note
+    });
+    if (error) { toast(error.message, true); return; }
+    toast('Aliment ajouté.');
+    ['f-name','f-p','f-g','f-l','f-kcal','f-unit-label','f-unit-weight','f-note'].forEach(function(id){ document.getElementById(id).value = ''; });
+    renderAlimentsView();
+  });
+
+  // ---- Boot ----
   (async function(){
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (!session) { window.location.href = 'index.html'; return; }
@@ -153,7 +513,7 @@
     document.getElementById('avatar-initials').textContent = name.slice(0, 2).toUpperCase();
 
     const { data: studentRows } = await supabaseClient.from('profiles').select('id, full_name').eq('coach_id', coachId).eq('role', 'student');
-    students = (studentRows || []).map(function(s){ return { id: s.id, full_name: s.full_name, email: '' }; });
+    students = (studentRows || []).map(function(s){ return { id: s.id, full_name: s.full_name }; });
     renderRoster();
   })();
 </script>
