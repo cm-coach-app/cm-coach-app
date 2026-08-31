@@ -300,7 +300,15 @@
     }
 
     el.querySelectorAll('#sess-tabs [data-sess]').forEach(function(tag){
-      tag.addEventListener('click', function(){ currentSessionId = tag.dataset.sess; renderExerciseLog(); });
+      tag.addEventListener('click', function(){
+        currentSessionId = tag.dataset.sess;
+        el.querySelectorAll('#sess-tabs [data-sess]').forEach(function(t){
+          const active = t.dataset.sess === currentSessionId;
+          t.style.background = active ? 'var(--accent)' : '';
+          t.style.color = active ? '#191506' : '';
+        });
+        renderExerciseLog();
+      });
     });
 
     await renderExerciseLog();
