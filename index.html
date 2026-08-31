@@ -27,6 +27,18 @@
         <label class="field-label">Nom complet</label>
         <input class="field-input" id="full-name" type="text" autocomplete="name">
       </div>
+      <div class="auth-field" id="bio-field" style="display:none;">
+        <div style="display:flex;gap:12px;">
+          <div style="flex:1;">
+            <label class="field-label">Taille (cm)</label>
+            <input class="field-input" id="signup-height" type="number" min="100" max="250" required>
+          </div>
+          <div style="flex:1;">
+            <label class="field-label">Âge</label>
+            <input class="field-input" id="signup-age" type="number" min="10" max="100" required>
+          </div>
+        </div>
+      </div>
       <div class="auth-field">
         <label class="field-label">Email</label>
         <input class="field-input" id="email" type="email" required autocomplete="email">
@@ -51,6 +63,7 @@
       btn.classList.add('active');
       mode = btn.dataset.mode;
       document.getElementById('name-field').style.display = mode === 'signup' ? 'block' : 'none';
+      document.getElementById('bio-field').style.display = mode === 'signup' ? 'block' : 'none';
       document.getElementById('submit-btn').textContent = mode === 'signup' ? 'Créer mon compte' : 'Se connecter';
       document.getElementById('auth-error').textContent = '';
     });
@@ -78,9 +91,11 @@
     try {
       if (mode === 'signup') {
         const fullName = document.getElementById('full-name').value.trim();
+        const height = document.getElementById('signup-height').value;
+        const age = document.getElementById('signup-age').value;
         const { data, error } = await supabaseClient.auth.signUp({
           email, password,
-          options: { data: { full_name: fullName } }
+          options: { data: { full_name: fullName, height_cm: height, age: age } }
         });
         if (error) throw error;
         if (data.session) {
