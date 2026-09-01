@@ -73,12 +73,12 @@
             </select>
           </div>
         </div>
-        <div style="font-size:11.5px;color:var(--text-faint);margin-bottom:10px;line-height:1.5;">Valeurs de référence pour 100g, à remplir une seule fois — l'app recalcule ensuite automatiquement les macros selon le grammage que tu choisis dans chaque repas.</div>
+        <div style="font-size:11.5px;color:var(--text-faint);margin-bottom:10px;line-height:1.5;">Valeurs de référence pour 100g, à remplir une seule fois — l'app recalcule ensuite automatiquement les macros selon le grammage que tu choisis dans chaque repas. Le Kcal se calcule automatiquement à partir de Prot/Gluc/Lip (tu peux le corriger à la main si l'étiquette donne une valeur différente).</div>
         <div class="mini-form" style="margin-bottom:12px;">
           <div class="mini-field"><label>Prot /100g</label><input id="f-p" type="number" step="0.1" style="width:80px;"></div>
           <div class="mini-field"><label>Gluc /100g</label><input id="f-g" type="number" step="0.1" style="width:80px;"></div>
           <div class="mini-field"><label>Lip /100g</label><input id="f-l" type="number" step="0.1" style="width:80px;"></div>
-          <div class="mini-field"><label>Kcal /100g</label><input id="f-kcal" type="number" step="1" style="width:80px;"></div>
+          <div class="mini-field"><label>Kcal /100g (auto)</label><input id="f-kcal" type="number" step="1" style="width:80px;"></div>
           <div class="mini-field"><label>Unité (optionnel)</label><input id="f-unit-label" placeholder="Ex: œuf" style="width:100px;"></div>
           <div class="mini-field"><label>Poids/unité (g)</label><input id="f-unit-weight" type="number" style="width:100px;"></div>
         </div>
@@ -689,7 +689,8 @@
           '<span style="color:var(--text-faint);">g</span>' +
           '<div style="width:70px;text-align:right;color:var(--text-dim);">' + kcal.toFixed(0) + ' kcal</div>' +
           '<button class="del-item-btn" data-item="' + it.id + '" title="Supprimer" style="background:none;border:none;color:var(--warn);cursor:pointer;font-size:17px;line-height:1;padding:2px 4px;">×</button>' +
-        '</div>';
+        '</div>' +
+        '<div style="font-size:10.5px;color:var(--text-faint);padding:2px 0 0 2px;">' + p.toFixed(1) + 'g P · ' + g.toFixed(1) + 'g G · ' + l.toFixed(1) + 'g L</div>';
       (altsByItem[it.id] || []).forEach(function(a){
         html += '<div class="row" style="font-size:11.5px;padding:4px 0 4px 14px;color:var(--text-dim);border-top:none;">' +
           '<div style="flex:1;">OU ' + esc(a.foods.name) + ' — ' + a.quantity_grams + 'g</div>' +
@@ -814,6 +815,15 @@
       wrap.appendChild(card);
     });
   }
+
+  ['f-p','f-g','f-l'].forEach(function(id){
+    document.getElementById(id).addEventListener('input', function(){
+      const p = parseFloat(document.getElementById('f-p').value) || 0;
+      const g = parseFloat(document.getElementById('f-g').value) || 0;
+      const l = parseFloat(document.getElementById('f-l').value) || 0;
+      document.getElementById('f-kcal').value = Math.round(p * 4 + g * 4 + l * 9);
+    });
+  });
 
   document.getElementById('add-food-btn').addEventListener('click', async function(){
     const name = document.getElementById('f-name').value.trim();
