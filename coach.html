@@ -124,6 +124,8 @@
     if (current && opts.indexOf(current) === -1) opts.unshift(current);
     return opts.map(function(o){ return '<option value="' + esc(o) + '"' + (o === current ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('');
   }
+  const MEAL_TYPE_COLORS = { 'Petit-déjeuner': '#F7C725', 'Déjeuner': '#FF8562', 'Collation': '#7FB8E0', 'Dîner': '#C77DFF', 'Soir': '#948668' };
+  function mealTypeColor(name){ return MEAL_TYPE_COLORS[name] || '#F7C725'; }
   const DAY_TYPE_LABELS = { training: "Jour d'entraînement", off: 'Jour off', diet1: 'Diète 1', diet2: 'Diète 2' };
   function dayTypeLabel(type){ return DAY_TYPE_LABELS[type] || type; }
   function currentWeekFor(program){
@@ -417,10 +419,11 @@
       }
       html += '<div class="row" style="flex-direction:column;align-items:stretch;gap:6px;">' +
         '<div style="display:flex;align-items:center;">' +
-        '<div style="flex:1;">' + esc(ex.name) + '</div>' +
+        '<div style="flex:1;">' + (ex.youtube_url ? '<a href="' + esc(ex.youtube_url) + '" target="_blank" rel="noopener" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--accent);">' + esc(ex.name) + '</a>' : esc(ex.name)) + '</div>' +
         '<input class="mini-input ex-reps" data-id="' + ex.id + '" type="number" value="' + (t && t.target_reps != null ? t.target_reps : '') + '" placeholder="reps" style="width:64px;text-align:center;">' +
         '<input class="mini-input ex-charge" data-id="' + ex.id + '" type="number" step="0.5" value="' + (t && t.target_charge != null ? t.target_charge : '') + '" placeholder="kg" style="width:70px;text-align:center;margin-left:8px;">' +
         '</div>' +
+        '<input class="mini-input ex-youtube" data-id="' + ex.id + '" type="url" value="' + esc(ex.youtube_url || '') + '" placeholder="Lien YouTube (optionnel)" style="font-size:11.5px;">' +
         (realiseLine ? '<div style="font-size:11px;' + (hasLog ? 'color:var(--text-dim);' : 'color:var(--text-faint);font-style:italic;') + '">' + realiseLine + '</div>' : '') +
       '</div>';
     });
@@ -428,6 +431,7 @@
       '<div class="mini-field" style="flex:1;min-width:140px;"><label>Exercice</label><input class="new-ex-name" placeholder="Ex: Presse à cuisses"></div>' +
       '<div class="mini-field"><label>Reps cible (S' + currentWeek + ')</label><input class="new-ex-reps" type="number" style="width:90px;"></div>' +
       '<div class="mini-field"><label>Charge (kg)</label><input class="new-ex-charge" type="number" step="0.5" style="width:80px;"></div>' +
+      '<div class="mini-field" style="flex:1;min-width:160px;"><label>Lien YouTube (optionnel)</label><input class="new-ex-youtube" type="url" placeholder="https://youtube.com/..."></div>' +
       '<button class="btn add-ex-btn" style="padding:9px 16px;">+ Ajouter</button></div>';
     body.innerHTML = html;
 
@@ -446,13 +450,24 @@
       });
     });
 
+    body.querySelectorAll('.ex-youtube').forEach(function(input){
+      input.addEventListener('change', async function(){
+        const url = this.value.trim();
+        const { error } = await supabaseClient.from('exercises').update({ youtube_url: url || null }).eq('id', this.dataset.id);
+        if (error) { toast(error.message, true); return; }
+        toast('Lien enregistré.');
+        await renderExercises(body, session);
+      });
+    });
+
     body.querySelector('.add-ex-btn').addEventListener('click', async function(){
       const name = body.querySelector('.new-ex-name').value.trim();
       const reps = body.querySelector('.new-ex-reps').value === '' ? null : parseInt(body.querySelector('.new-ex-reps').value, 10);
       const charge = body.querySelector('.new-ex-charge').value === '' ? null : parseFloat(body.querySelector('.new-ex-charge').value);
+      const youtubeUrl = body.querySelector('.new-ex-youtube').value.trim() || null;
       if (!name) { toast('Donne un nom à l\'exercice.', true); return; }
       const order = (exercises ? exercises.length : 0) + 1;
-      const { data: newEx, error } = await supabaseClient.from('exercises').insert({ session_id: session.id, name: name, exercise_order: order }).select().single();
+      const { data: newEx, error } = await supabaseClient.from('exercises').insert({ session_id: session.id, name: name, exercise_order: order, youtube_url: youtubeUrl }).select().single();
       if (error) { toast(error.message, true); return; }
       if (reps !== null || charge !== null) {
         await supabaseClient.from('exercise_targets').insert({ exercise_id: newEx.id, week: currentWeek, target_reps: reps, target_charge: charge });
@@ -508,8 +523,9 @@
     const { data: meals } = await supabaseClient.from('meals').select('*').eq('diet_day_id', day.id).order('meal_order', { ascending: true });
     let html = '';
     (meals || []).forEach(function(m){
-      html += '<div class="meal-block" data-meal-id="' + m.id + '" style="margin-bottom:12px;padding:10px;background:var(--surface-3);border-radius:10px;">' +
-        '<select class="mini-input meal-name-select" data-meal="' + m.id + '" style="font-weight:600;font-size:13px;margin-bottom:8px;">' + mealNameOptions(m.name) + '</select>' +
+      const mColor = mealTypeColor(m.name);
+      html += '<div class="meal-block" data-meal-id="' + m.id + '" style="margin-bottom:12px;padding:10px;background:var(--surface-3);border-radius:10px;border-top:3px solid ' + mColor + ';">' +
+        '<select class="mini-input meal-name-select" data-meal="' + m.id + '" style="font-weight:700;font-size:14px;margin-bottom:10px;text-align:center;text-align-last:center;color:' + mColor + ';border-color:' + mColor + ';width:100%;">' + mealNameOptions(m.name) + '</select>' +
         '<div class="meal-items" data-meal-id="' + m.id + '"></div>' +
         '<div class="mini-form" style="margin-top:10px;align-items:flex-end;">' +
         '<div class="mini-field" style="flex:1;min-width:140px;"><label>Aliment</label><select class="mini-input new-item-food"></select></div>' +
@@ -527,6 +543,7 @@
         const { error } = await supabaseClient.from('meals').update({ name: this.value }).eq('id', this.dataset.meal);
         if (error) { toast(error.message, true); return; }
         toast('Repas renommé.');
+        await renderMeals(wrap, day);
       });
     });
 
@@ -571,6 +588,15 @@
 
   async function renderMealItems(el, mealId){
     const { data: items } = await supabaseClient.from('meal_items').select('*, foods(*)').eq('meal_id', mealId);
+    const itemIds = (items || []).map(function(it){ return it.id; });
+    let altsByItem = {};
+    if (itemIds.length) {
+      const { data: alts } = await supabaseClient.from('meal_item_alternatives').select('*, foods(*)').in('meal_item_id', itemIds);
+      (alts || []).forEach(function(a){
+        if (!altsByItem[a.meal_item_id]) altsByItem[a.meal_item_id] = [];
+        altsByItem[a.meal_item_id].push(a);
+      });
+    }
     const totals = { p: 0, g: 0, l: 0, kcal: 0 };
     let html = '';
     (items || []).forEach(function(it){
@@ -578,16 +604,37 @@
       const factor = it.quantity_grams / 100;
       const p = f.protein_per_100g * factor, g = f.carbs_per_100g * factor, l = f.fat_per_100g * factor, kcal = f.kcal_per_100g * factor;
       totals.p += p; totals.g += g; totals.l += l; totals.kcal += kcal;
-      html += '<div class="row" style="font-size:12.5px;padding:6px 0;gap:8px;">' +
-        '<div style="flex:1;">' + esc(f.name) + '</div>' +
-        '<input class="mini-input item-qty" data-item="' + it.id + '" type="number" value="' + it.quantity_grams + '" style="width:60px;text-align:center;">' +
-        '<span style="color:var(--text-faint);">g</span>' +
-        '<div style="width:70px;text-align:right;color:var(--text-dim);">' + kcal.toFixed(0) + ' kcal</div>' +
-        '<button class="del-item-btn" data-item="' + it.id + '" title="Supprimer" style="background:none;border:none;color:var(--warn);cursor:pointer;font-size:17px;line-height:1;padding:2px 4px;">×</button>' +
+      html += '<div style="padding:6px 0;border-top:1px solid var(--border);">' +
+        '<div class="row" style="font-size:12.5px;padding:0;gap:8px;border-top:none;">' +
+          '<div style="flex:1;">' + esc(f.name) + '</div>' +
+          '<input class="mini-input item-qty" data-item="' + it.id + '" type="number" value="' + it.quantity_grams + '" style="width:60px;text-align:center;">' +
+          '<span style="color:var(--text-faint);">g</span>' +
+          '<div style="width:70px;text-align:right;color:var(--text-dim);">' + kcal.toFixed(0) + ' kcal</div>' +
+          '<button class="del-item-btn" data-item="' + it.id + '" title="Supprimer" style="background:none;border:none;color:var(--warn);cursor:pointer;font-size:17px;line-height:1;padding:2px 4px;">×</button>' +
+        '</div>';
+      (altsByItem[it.id] || []).forEach(function(a){
+        html += '<div class="row" style="font-size:11.5px;padding:4px 0 4px 14px;color:var(--text-dim);border-top:none;">' +
+          '<div style="flex:1;">OU ' + esc(a.foods.name) + ' — ' + a.quantity_grams + 'g</div>' +
+          '<button class="del-alt-btn" data-alt="' + a.id + '" title="Supprimer" style="background:none;border:none;color:var(--warn);cursor:pointer;font-size:15px;line-height:1;padding:2px 4px;">×</button>' +
+        '</div>';
+      });
+      html += '<div class="mini-form" style="margin:6px 0 0 14px;gap:6px;">' +
+        '<select class="mini-input new-alt-food" data-item="' + it.id + '" style="font-size:11.5px;padding:5px 7px;"></select>' +
+        '<input class="mini-input new-alt-qty" data-item="' + it.id + '" type="number" placeholder="g" style="width:55px;font-size:11.5px;padding:5px 7px;">' +
+        '<button class="btn-ghost add-alt-btn" data-item="' + it.id + '" style="padding:4px 10px;font-size:11px;border-radius:8px;">+ équivalence</button>' +
+        '</div>' +
       '</div>';
     });
     html += '<div class="row" style="font-weight:600;font-size:12px;padding-top:6px;"><div style="flex:1;">Total</div><div style="text-align:right;">' + totals.p.toFixed(1) + 'P · ' + totals.g.toFixed(1) + 'G · ' + totals.l.toFixed(1) + 'L · ' + totals.kcal.toFixed(0) + ' kcal</div></div>';
     el.innerHTML = html;
+
+    el.querySelectorAll('.new-alt-food').forEach(function(sel){
+      coachFoods.forEach(function(f){
+        const opt = document.createElement('option');
+        opt.value = f.id; opt.textContent = f.name;
+        sel.appendChild(opt);
+      });
+    });
 
     el.querySelectorAll('.item-qty').forEach(function(input){
       input.addEventListener('change', async function(){
@@ -604,6 +651,30 @@
         const { error } = await supabaseClient.from('meal_items').delete().eq('id', btn.dataset.item);
         if (error) { toast(error.message, true); return; }
         toast('Aliment retiré.');
+        await renderMealItems(el, mealId);
+      });
+    });
+
+    el.querySelectorAll('.del-alt-btn').forEach(function(btn){
+      btn.addEventListener('click', async function(){
+        const { error } = await supabaseClient.from('meal_item_alternatives').delete().eq('id', btn.dataset.alt);
+        if (error) { toast(error.message, true); return; }
+        toast('Équivalence retirée.');
+        await renderMealItems(el, mealId);
+      });
+    });
+
+    el.querySelectorAll('.add-alt-btn').forEach(function(btn){
+      btn.addEventListener('click', async function(){
+        const itemId = btn.dataset.item;
+        const foodSel = el.querySelector('.new-alt-food[data-item="' + itemId + '"]');
+        const qtyInput = el.querySelector('.new-alt-qty[data-item="' + itemId + '"]');
+        const foodId = foodSel.value;
+        const qty = parseFloat(qtyInput.value);
+        if (!foodId || isNaN(qty) || qty <= 0) { toast('Choisis un aliment et une quantité.', true); return; }
+        const { error } = await supabaseClient.from('meal_item_alternatives').insert({ meal_item_id: itemId, food_id: foodId, quantity_grams: qty });
+        if (error) { toast(error.message, true); return; }
+        toast('Équivalence ajoutée.');
         await renderMealItems(el, mealId);
       });
     });
