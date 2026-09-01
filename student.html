@@ -131,7 +131,7 @@
     const t = document.getElementById('toast');
     t.textContent = msg;
     t.className = 'toast show' + (isErr ? ' err' : '');
-    setTimeout(function(){ t.className = 'toast'; }, 3000);
+    setTimeout(function(){ t.className = 'toast'; }, 4000);
   }
 
   function fmt1(n){ return Number(n).toFixed(1); }
@@ -451,6 +451,10 @@
         '</div>' +
       '</div>';
       html += '</div>';
+    }
+    if (program.diet_notes) {
+      html += '<div class="card"><h3 style="margin:0 0 10px;font-size:15px;">Notes de ton coach</h3>' +
+        '<p style="margin:0;font-size:13.5px;color:var(--text-dim);line-height:1.6;white-space:pre-wrap;">' + esc(program.diet_notes) + '</p></div>';
     }
     el.innerHTML = html;
   }

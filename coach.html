@@ -112,7 +112,7 @@
     const t = document.getElementById('toast');
     t.textContent = msg;
     t.className = 'toast show' + (isErr ? ' err' : '');
-    setTimeout(function(){ t.className = 'toast'; }, 3000);
+    setTimeout(function(){ t.className = 'toast'; }, 4000);
   }
   function fmt1(n){ return Number(n).toFixed(1); }
   function esc(s){ return (s == null ? '' : String(s)).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
@@ -495,7 +495,11 @@
     el.innerHTML = '<div id="diet-days"></div>' +
       '<div class="mini-form" style="margin-top:10px;">' +
       '<div class="mini-field"><label>Type de jour</label><select id="new-day-type"><option value="training">Jour d\'entraînement</option><option value="off">Jour off</option><option value="diet1">Diète 1</option><option value="diet2">Diète 2</option></select></div>' +
-      '<button class="btn" id="add-day-btn">+ Ajouter un jour</button></div>';
+      '<button class="btn" id="add-day-btn">+ Ajouter un jour</button></div>' +
+      '<div class="mini-field" style="margin-top:20px;">' +
+      '<label>Notes générales (hydratation, compléments, etc.)</label>' +
+      '<textarea id="diet-notes" rows="3" placeholder="Ex: Boire 2L d\'eau par jour. Prendre 1 gélule de probiotique le matin à jeun." style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;resize:vertical;">' + esc(program.diet_notes || '') + '</textarea>' +
+      '</div>';
 
     const daysWrap = document.getElementById('diet-days');
     if (!days || !days.length) {
@@ -516,6 +520,12 @@
       if (error) { toast(error.message, true); return; }
       toast('Jour ajouté.');
       loadTabContent();
+    });
+
+    document.getElementById('diet-notes').addEventListener('change', async function(){
+      const { error } = await supabaseClient.from('programs').update({ diet_notes: this.value.trim() || null }).eq('id', program.id);
+      if (error) { toast(error.message, true); return; }
+      toast('Notes enregistrées.');
     });
   }
 
