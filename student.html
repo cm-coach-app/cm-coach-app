@@ -145,6 +145,7 @@
       item.classList.add('active');
       const view = item.dataset.view;
       VIEWS.forEach(function(v){ document.getElementById('view-' + v).style.display = (v === view) ? 'block' : 'none'; });
+      if (view === 'poids') loadWeightData();
       if (view === 'entrainement' && !entrainementLoaded) { entrainementLoaded = true; loadEntrainement(); }
       if (view === 'diete' && !dieteLoaded) { dieteLoaded = true; loadDiete(); }
       if (view === 'aliments' && !alimentsLoaded) { alimentsLoaded = true; loadAliments(); }
