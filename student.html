@@ -80,6 +80,7 @@
         </div>
 
         <div class="stat-grid" style="margin-bottom:20px;">
+          <div class="stat-tile"><div class="stat-label">Poids de départ</div><div class="stat-value" id="stat-depart">—</div></div>
           <div class="stat-tile"><div class="stat-label">Poids objectif</div><div class="stat-value" id="stat-goal">—</div></div>
           <div class="stat-tile"><div class="stat-label">Poids actuel</div><div class="stat-value" id="stat-actuel">—</div></div>
           <div class="stat-tile"><div class="stat-label">Perte totale</div><div class="stat-value" id="stat-perte" style="color:var(--accent);">—</div></div>
@@ -221,6 +222,7 @@
     const totalToLose = goals.start_weight - goals.goal_weight;
     const pct = totalToLose !== 0 ? Math.max(0, Math.min(100, (perte / totalToLose) * 100)) : 0;
 
+    document.getElementById('stat-depart').textContent = fmt1(goals.start_weight) + ' kg';
     document.getElementById('stat-goal').textContent = fmt1(goals.goal_weight) + ' kg';
     document.getElementById('stat-actuel').textContent = fmt1(current) + ' kg';
     document.getElementById('stat-perte').textContent = (perte >= 0 ? '-' : '+') + fmt1(Math.abs(perte)) + ' kg';
