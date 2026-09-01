@@ -168,6 +168,7 @@
   }
 
   function selectStudent(id){
+    if (id === selectedId) return;
     selectedId = id;
     activeTab = 'poids';
     currentWeek = null;
@@ -187,7 +188,11 @@
       '</div>' +
       '<div id="tab-content"><div class="empty-note">Chargement…</div></div>';
     panel.querySelectorAll('.tab').forEach(function(t){
-      t.addEventListener('click', function(){ activeTab = t.dataset.tab; renderStudentPanel(); });
+      t.addEventListener('click', function(){
+        if (t.dataset.tab === activeTab) return;
+        activeTab = t.dataset.tab;
+        renderStudentPanel();
+      });
     });
     loadTabContent();
   }
@@ -308,7 +313,7 @@
         ? await supabaseClient.from('weight_goals').update({ start_weight: start, goal_weight: target }).eq('student_id', selectedId)
         : await supabaseClient.from('weight_goals').insert({ student_id: selectedId, start_weight: start, goal_weight: target });
       if (error) { toast(error.message, true); return; }
-      toast('Objectif enregistré.');
+      toast('Objectif enregistré : départ ' + fmt1(start) + ' kg, cible ' + fmt1(target) + ' kg.');
       loadTabContent();
     });
 
