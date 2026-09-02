@@ -364,7 +364,8 @@
     let html = '';
     (exercises || []).forEach(function(ex){
       const t = (weekTargets || []).find(function(wt){ return wt.exercise_id === ex.id; });
-      const target = (t && t.target_reps != null ? t.target_reps : '?') + ' × ' + (t && t.target_charge != null ? t.target_charge + ' kg' : '—');
+      const target = (t && t.target_reps != null ? t.target_reps : '?') + ' × ' + (t && t.target_charge != null ? t.target_charge + ' kg' : '—') +
+        (t && t.target_rest_sec != null ? ' · repos ' + t.target_rest_sec + 's' : '');
       html += '<div class="sub-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
         '<b>' + (ex.youtube_url ? '<a href="' + esc(ex.youtube_url) + '" target="_blank" rel="noopener" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--accent);">' + esc(ex.name) + ' ▶</a>' : esc(ex.name)) + '</b><span class="tag">Cible : ' + target + '</span></div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;" data-ex="' + ex.id + '">';

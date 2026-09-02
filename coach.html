@@ -495,6 +495,7 @@
         '<div style="flex:1;">' + (ex.youtube_url ? '<a href="' + esc(ex.youtube_url) + '" target="_blank" rel="noopener" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--accent);">' + esc(ex.name) + '</a>' : esc(ex.name)) + '</div>' +
         '<input class="mini-input ex-reps" data-id="' + ex.id + '" type="number" value="' + (t && t.target_reps != null ? t.target_reps : '') + '" placeholder="reps" style="width:64px;text-align:center;">' +
         '<input class="mini-input ex-charge" data-id="' + ex.id + '" type="number" step="0.5" value="' + (t && t.target_charge != null ? t.target_charge : '') + '" placeholder="kg" style="width:70px;text-align:center;margin-left:8px;">' +
+        '<input class="mini-input ex-rest" data-id="' + ex.id + '" type="number" step="5" value="' + (t && t.target_rest_sec != null ? t.target_rest_sec : '') + '" placeholder="repos (s)" style="width:80px;text-align:center;margin-left:8px;">' +
         '</div>' +
         '<input class="mini-input ex-youtube" data-id="' + ex.id + '" type="url" value="' + esc(ex.youtube_url || '') + '" placeholder="Lien YouTube (optionnel)" style="font-size:11.5px;">' +
         (realiseLine ? '<div style="font-size:11px;' + (hasLog ? 'color:var(--text-dim);' : 'color:var(--text-faint);font-style:italic;') + '">' + realiseLine + '</div>' : '') +
@@ -504,19 +505,22 @@
       '<div class="mini-field" style="flex:1;min-width:140px;"><label>Exercice</label><input class="new-ex-name" placeholder="Ex: Presse à cuisses"></div>' +
       '<div class="mini-field"><label>Reps cible (S' + currentWeek + ')</label><input class="new-ex-reps" type="number" style="width:90px;"></div>' +
       '<div class="mini-field"><label>Charge (kg)</label><input class="new-ex-charge" type="number" step="0.5" style="width:80px;"></div>' +
+      '<div class="mini-field"><label>Repos (sec)</label><input class="new-ex-rest" type="number" step="5" style="width:90px;"></div>' +
       '<div class="mini-field" style="flex:1;min-width:160px;"><label>Lien YouTube (optionnel)</label><input class="new-ex-youtube" type="url" placeholder="https://youtube.com/..."></div>' +
       '<button class="btn add-ex-btn" style="padding:9px 16px;">+ Ajouter</button></div>';
     body.innerHTML = html;
 
-    body.querySelectorAll('.ex-reps, .ex-charge').forEach(function(input){
+    body.querySelectorAll('.ex-reps, .ex-charge, .ex-rest').forEach(function(input){
       input.addEventListener('change', async function(){
         const id = this.dataset.id;
         const repsInput = body.querySelector('.ex-reps[data-id="' + id + '"]');
         const chargeInput = body.querySelector('.ex-charge[data-id="' + id + '"]');
+        const restInput = body.querySelector('.ex-rest[data-id="' + id + '"]');
         const reps = repsInput.value === '' ? null : parseInt(repsInput.value, 10);
         const charge = chargeInput.value === '' ? null : parseFloat(chargeInput.value);
+        const rest = restInput.value === '' ? null : parseInt(restInput.value, 10);
         const { error } = await supabaseClient.from('exercise_targets').upsert(
-          { exercise_id: id, week: currentWeek, target_reps: reps, target_charge: charge },
+          { exercise_id: id, week: currentWeek, target_reps: reps, target_charge: charge, target_rest_sec: rest },
           { onConflict: 'exercise_id,week' }
         );
         if (error) toast(error.message, true); else toast('Mis à jour.');
@@ -537,13 +541,14 @@
       const name = body.querySelector('.new-ex-name').value.trim();
       const reps = body.querySelector('.new-ex-reps').value === '' ? null : parseInt(body.querySelector('.new-ex-reps').value, 10);
       const charge = body.querySelector('.new-ex-charge').value === '' ? null : parseFloat(body.querySelector('.new-ex-charge').value);
+      const rest = body.querySelector('.new-ex-rest').value === '' ? null : parseInt(body.querySelector('.new-ex-rest').value, 10);
       const youtubeUrl = body.querySelector('.new-ex-youtube').value.trim() || null;
       if (!name) { toast('Donne un nom à l\'exercice.', true); return; }
       const order = (exercises ? exercises.length : 0) + 1;
       const { data: newEx, error } = await supabaseClient.from('exercises').insert({ session_id: session.id, name: name, exercise_order: order, youtube_url: youtubeUrl }).select().single();
       if (error) { toast(error.message, true); return; }
-      if (reps !== null || charge !== null) {
-        await supabaseClient.from('exercise_targets').insert({ exercise_id: newEx.id, week: currentWeek, target_reps: reps, target_charge: charge });
+      if (reps !== null || charge !== null || rest !== null) {
+        await supabaseClient.from('exercise_targets').insert({ exercise_id: newEx.id, week: currentWeek, target_reps: reps, target_charge: charge, target_rest_sec: rest });
       }
       toast('Exercice ajouté.');
       await renderExercises(body, session);
