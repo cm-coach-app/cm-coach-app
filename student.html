@@ -400,19 +400,23 @@
         const file = this.files[0];
         if (!file) return;
         const exId = this.dataset.ex;
-        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-        const path = studentId + '/' + exId + '.' + ext;
-        const { error: uploadError } = await supabaseClient.storage.from('exercise-photos').upload(path, file, { upsert: true, contentType: file.type });
-        if (uploadError) { toast(uploadError.message, true); return; }
-        const { data: pub } = supabaseClient.storage.from('exercise-photos').getPublicUrl(path);
-        const photoUrl = pub.publicUrl + '?t=' + Date.now();
-        const { error } = await supabaseClient.from('exercise_photos').upsert(
-          { exercise_id: exId, photo_url: photoUrl, updated_at: new Date().toISOString() },
-          { onConflict: 'exercise_id' }
-        );
-        if (error) { toast(error.message, true); return; }
-        toast('Photo enregistrée !');
-        await renderExerciseLog();
+        toast('Envoi de la photo…', false);
+        try {
+          const ext = (file.name && file.name.includes('.')) ? file.name.split('.').pop().toLowerCase() : 'jpg';
+          const path = studentId + '/' + exId + '-' + Date.now() + '.' + ext;
+          const { error: uploadError } = await supabaseClient.storage.from('exercise-photos').upload(path, file, { contentType: file.type || 'image/jpeg' });
+          if (uploadError) throw uploadError;
+          const { data: pub } = supabaseClient.storage.from('exercise-photos').getPublicUrl(path);
+          const { error } = await supabaseClient.from('exercise_photos').upsert(
+            { exercise_id: exId, photo_url: pub.publicUrl, updated_at: new Date().toISOString() },
+            { onConflict: 'exercise_id' }
+          );
+          if (error) throw error;
+          toast('Photo enregistrée !');
+          await renderExerciseLog();
+        } catch (err) {
+          toast((err && err.message) || 'Erreur lors de l\'envoi de la photo.', true);
+        }
       });
     });
 
