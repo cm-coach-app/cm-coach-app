@@ -365,14 +365,22 @@
     const { data: weekTargets } = exIds.length
       ? await supabaseClient.from('exercise_targets').select('*').in('exercise_id', exIds).eq('week', currentWeek)
       : { data: [] };
+    const { data: photos } = exIds.length
+      ? await supabaseClient.from('exercise_photos').select('*').in('exercise_id', exIds)
+      : { data: [] };
 
     let html = '';
     (exercises || []).forEach(function(ex){
       const t = (weekTargets || []).find(function(wt){ return wt.exercise_id === ex.id; });
+      const photo = (photos || []).find(function(p){ return p.exercise_id === ex.id; });
       const target = (t && t.target_reps != null ? t.target_reps : '?') + ' × ' + (t && t.target_charge != null ? t.target_charge + ' kg' : '—') +
         (t && t.target_rest ? ' · repos ' + esc(t.target_rest) : '');
-      html += '<div class="sub-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
-        '<b>' + (ex.youtube_url ? '<a href="' + esc(ex.youtube_url) + '" target="_blank" rel="noopener" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--accent);">' + esc(ex.name) + ' ▶</a>' : esc(ex.name)) + '</b><span class="tag">Cible : ' + target + '</span></div>' +
+      html += '<div class="sub-card"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">' +
+        '<label class="ex-photo-label" data-ex="' + ex.id + '" title="' + (photo ? 'Changer la photo de la plaque' : 'Ajouter une photo de la plaque') + '" style="width:34px;height:34px;border-radius:8px;overflow:hidden;flex:none;cursor:pointer;background:var(--surface-3);display:flex;align-items:center;justify-content:center;border:1px solid var(--border);">' +
+          (photo ? '<img src="' + esc(photo.photo_url) + '" style="width:100%;height:100%;object-fit:cover;">' : '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-faint);"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>') +
+          '<input type="file" accept="image/*" capture="environment" class="ex-photo-input" data-ex="' + ex.id + '" style="display:none;">' +
+        '</label>' +
+        '<b style="flex:1;">' + (ex.youtube_url ? '<a href="' + esc(ex.youtube_url) + '" target="_blank" rel="noopener" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--accent);">' + esc(ex.name) + ' ▶</a>' : esc(ex.name)) + '</b><span class="tag">Cible : ' + target + '</span></div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;" data-ex="' + ex.id + '">';
       for (let s = 1; s <= 4; s++) {
         const existing = (logs || []).find(function(l){ return l.exercise_id === ex.id && l.series === s; });
@@ -386,6 +394,27 @@
     });
     if (!exercises || !exercises.length) html = '<div class="empty-note">Aucun exercice dans cette séance.</div>';
     el.innerHTML = html;
+
+    el.querySelectorAll('.ex-photo-input').forEach(function(input){
+      input.addEventListener('change', async function(){
+        const file = this.files[0];
+        if (!file) return;
+        const exId = this.dataset.ex;
+        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        const path = studentId + '/' + exId + '.' + ext;
+        const { error: uploadError } = await supabaseClient.storage.from('exercise-photos').upload(path, file, { upsert: true, contentType: file.type });
+        if (uploadError) { toast(uploadError.message, true); return; }
+        const { data: pub } = supabaseClient.storage.from('exercise-photos').getPublicUrl(path);
+        const photoUrl = pub.publicUrl + '?t=' + Date.now();
+        const { error } = await supabaseClient.from('exercise_photos').upsert(
+          { exercise_id: exId, photo_url: photoUrl, updated_at: new Date().toISOString() },
+          { onConflict: 'exercise_id' }
+        );
+        if (error) { toast(error.message, true); return; }
+        toast('Photo enregistrée !');
+        await renderExerciseLog();
+      });
+    });
 
     async function saveSeries(exId, series){
       const repsInput = el.querySelector('.log-reps[data-ex="' + exId + '"][data-series="' + series + '"]');

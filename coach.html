@@ -460,6 +460,7 @@
     const prevWeek = currentWeek - 1;
     let targets = [];
     let logs = [];
+    let photos = [];
     if (exIds.length) {
       const { data: targetData } = await supabaseClient.from('exercise_targets').select('*').in('exercise_id', exIds).eq('week', currentWeek);
       targets = targetData || [];
@@ -467,12 +468,16 @@
         const { data: logData } = await supabaseClient.from('exercise_logs').select('*').in('exercise_id', exIds).eq('week', prevWeek);
         logs = logData || [];
       }
+      const { data: photoData } = await supabaseClient.from('exercise_photos').select('*').in('exercise_id', exIds);
+      photos = photoData || [];
     }
     function targetFor(exId){ return targets.find(function(t){ return t.exercise_id === exId; }); }
+    function photoFor(exId){ return photos.find(function(p){ return p.exercise_id === exId; }); }
 
     let html = '';
     (exercises || []).forEach(function(ex){
       const t = targetFor(ex.id);
+      const photo = photoFor(ex.id);
       const exLogs = logs.filter(function(l){ return l.exercise_id === ex.id; });
       const hasLog = exLogs.some(function(l){ return l.reps != null || l.charge != null; });
       let realise = '';
@@ -491,7 +496,8 @@
         realiseLine = 'Pas enregistré par l\'élève en S' + prevWeek;
       }
       html += '<div class="row" style="flex-direction:column;align-items:stretch;gap:6px;">' +
-        '<div style="display:flex;align-items:center;">' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+        (photo ? '<a href="' + esc(photo.photo_url) + '" target="_blank" rel="noopener" title="Voir la photo de la plaque" style="width:30px;height:30px;border-radius:7px;overflow:hidden;flex:none;border:1px solid var(--border);"><img src="' + esc(photo.photo_url) + '" style="width:100%;height:100%;object-fit:cover;"></a>' : '<span title="Pas de photo" style="width:30px;height:30px;border-radius:7px;flex:none;border:1px solid var(--border);background:var(--surface-3);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-faint);"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>') +
         '<div style="flex:1;">' + (ex.youtube_url ? '<a href="' + esc(ex.youtube_url) + '" target="_blank" rel="noopener" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--accent);">' + esc(ex.name) + '</a>' : esc(ex.name)) + '</div>' +
         '<input class="mini-input ex-reps" data-id="' + ex.id + '" type="number" value="' + (t && t.target_reps != null ? t.target_reps : '') + '" placeholder="reps" style="width:64px;text-align:center;">' +
         '<input class="mini-input ex-charge" data-id="' + ex.id + '" type="number" step="0.5" value="' + (t && t.target_charge != null ? t.target_charge : '') + '" placeholder="kg" style="width:70px;text-align:center;margin-left:8px;">' +
