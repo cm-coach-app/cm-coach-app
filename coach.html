@@ -481,12 +481,13 @@
       const exLogs = logs.filter(function(l){ return l.exercise_id === ex.id; });
       const hasLog = exLogs.some(function(l){ return l.reps != null || l.charge != null; });
       let realise = '';
-      for (let s = 1; s <= 4; s++) {
+      const loggedSeries = exLogs.map(function(l){ return l.series; }).sort(function(a, b){ return a - b; });
+      loggedSeries.forEach(function(s, idx){
         const l = exLogs.find(function(x){ return x.series === s; });
         const reps = l && l.reps != null ? l.reps : '–';
         const charge = l && l.charge != null ? l.charge + 'kg' : '–';
-        realise += (s > 1 ? '  ·  ' : '') + 'S' + s + ' ' + reps + '×' + charge;
-      }
+        realise += (idx > 0 ? '  ·  ' : '') + 'S' + s + ' ' + reps + '×' + charge;
+      });
       let realiseLine;
       if (prevWeek < 1) {
         realiseLine = '';
@@ -499,9 +500,12 @@
         '<div style="display:flex;align-items:center;gap:8px;">' +
         (photo ? '<a href="' + esc(photo.photo_url) + '" target="_blank" rel="noopener" title="Voir la photo de la plaque" style="width:30px;height:30px;border-radius:7px;overflow:hidden;flex:none;border:1px solid var(--border);"><img src="' + esc(photo.photo_url) + '" style="width:100%;height:100%;object-fit:cover;"></a>' : '<span title="Pas de photo" style="width:30px;height:30px;border-radius:7px;flex:none;border:1px solid var(--border);background:var(--surface-3);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-faint);"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>') +
         '<div style="flex:1;">' + (ex.youtube_url ? '<a href="' + esc(ex.youtube_url) + '" target="_blank" rel="noopener" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--accent);">' + esc(ex.name) + '</a>' : esc(ex.name)) + '</div>' +
+        '</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;">' +
+        '<input class="mini-input ex-series" data-id="' + ex.id + '" type="number" min="1" value="' + (t && t.target_series != null ? t.target_series : '') + '" placeholder="séries" style="width:64px;text-align:center;">' +
         '<input class="mini-input ex-reps" data-id="' + ex.id + '" type="number" value="' + (t && t.target_reps != null ? t.target_reps : '') + '" placeholder="reps" style="width:64px;text-align:center;">' +
-        '<input class="mini-input ex-charge" data-id="' + ex.id + '" type="number" step="0.5" value="' + (t && t.target_charge != null ? t.target_charge : '') + '" placeholder="kg" style="width:70px;text-align:center;margin-left:8px;">' +
-        '<input class="mini-input ex-rest" data-id="' + ex.id + '" type="text" value="' + esc(t && t.target_rest != null ? t.target_rest : '') + '" placeholder="repos" style="width:80px;text-align:center;margin-left:8px;">' +
+        '<input class="mini-input ex-charge" data-id="' + ex.id + '" type="number" step="0.5" value="' + (t && t.target_charge != null ? t.target_charge : '') + '" placeholder="kg" style="width:70px;text-align:center;">' +
+        '<input class="mini-input ex-rest" data-id="' + ex.id + '" type="text" value="' + esc(t && t.target_rest != null ? t.target_rest : '') + '" placeholder="repos" style="width:80px;text-align:center;">' +
         '</div>' +
         '<input class="mini-input ex-youtube" data-id="' + ex.id + '" type="url" value="' + esc(ex.youtube_url || '') + '" placeholder="Lien YouTube (optionnel)" style="font-size:11.5px;">' +
         (realiseLine ? '<div style="font-size:11px;' + (hasLog ? 'color:var(--text-dim);' : 'color:var(--text-faint);font-style:italic;') + '">' + realiseLine + '</div>' : '') +
@@ -509,6 +513,7 @@
     });
     html += '<div class="mini-form" style="margin-top:10px;">' +
       '<div class="mini-field" style="flex:1;min-width:140px;"><label>Exercice</label><input class="new-ex-name" placeholder="Ex: Presse à cuisses"></div>' +
+      '<div class="mini-field"><label>Séries</label><input class="new-ex-series" type="number" min="1" style="width:70px;"></div>' +
       '<div class="mini-field"><label>Reps cible (S' + currentWeek + ')</label><input class="new-ex-reps" type="number" style="width:90px;"></div>' +
       '<div class="mini-field"><label>Charge (kg)</label><input class="new-ex-charge" type="number" step="0.5" style="width:80px;"></div>' +
       '<div class="mini-field"><label>Repos</label><input class="new-ex-rest" type="text" placeholder="Ex: 1\'30" style="width:90px;"></div>' +
@@ -516,17 +521,19 @@
       '<button class="btn add-ex-btn" style="padding:9px 16px;">+ Ajouter</button></div>';
     body.innerHTML = html;
 
-    body.querySelectorAll('.ex-reps, .ex-charge, .ex-rest').forEach(function(input){
+    body.querySelectorAll('.ex-series, .ex-reps, .ex-charge, .ex-rest').forEach(function(input){
       input.addEventListener('change', async function(){
         const id = this.dataset.id;
+        const seriesInput = body.querySelector('.ex-series[data-id="' + id + '"]');
         const repsInput = body.querySelector('.ex-reps[data-id="' + id + '"]');
         const chargeInput = body.querySelector('.ex-charge[data-id="' + id + '"]');
         const restInput = body.querySelector('.ex-rest[data-id="' + id + '"]');
+        const series = seriesInput.value === '' ? null : parseInt(seriesInput.value, 10);
         const reps = repsInput.value === '' ? null : parseInt(repsInput.value, 10);
         const charge = chargeInput.value === '' ? null : parseFloat(chargeInput.value);
         const rest = restInput.value.trim() === '' ? null : restInput.value.trim();
         const { error } = await supabaseClient.from('exercise_targets').upsert(
-          { exercise_id: id, week: currentWeek, target_reps: reps, target_charge: charge, target_rest: rest },
+          { exercise_id: id, week: currentWeek, target_series: series, target_reps: reps, target_charge: charge, target_rest: rest },
           { onConflict: 'exercise_id,week' }
         );
         if (error) toast(error.message, true); else toast('Mis à jour.');
@@ -545,6 +552,7 @@
 
     body.querySelector('.add-ex-btn').addEventListener('click', async function(){
       const name = body.querySelector('.new-ex-name').value.trim();
+      const series = body.querySelector('.new-ex-series').value === '' ? null : parseInt(body.querySelector('.new-ex-series').value, 10);
       const reps = body.querySelector('.new-ex-reps').value === '' ? null : parseInt(body.querySelector('.new-ex-reps').value, 10);
       const charge = body.querySelector('.new-ex-charge').value === '' ? null : parseFloat(body.querySelector('.new-ex-charge').value);
       const rest = body.querySelector('.new-ex-rest').value.trim() === '' ? null : body.querySelector('.new-ex-rest').value.trim();
@@ -553,8 +561,8 @@
       const order = (exercises ? exercises.length : 0) + 1;
       const { data: newEx, error } = await supabaseClient.from('exercises').insert({ session_id: session.id, name: name, exercise_order: order, youtube_url: youtubeUrl }).select().single();
       if (error) { toast(error.message, true); return; }
-      if (reps !== null || charge !== null || rest !== null) {
-        await supabaseClient.from('exercise_targets').insert({ exercise_id: newEx.id, week: currentWeek, target_reps: reps, target_charge: charge, target_rest: rest });
+      if (series !== null || reps !== null || charge !== null || rest !== null) {
+        await supabaseClient.from('exercise_targets').insert({ exercise_id: newEx.id, week: currentWeek, target_series: series, target_reps: reps, target_charge: charge, target_rest: rest });
       }
       toast('Exercice ajouté.');
       await renderExercises(body, session);
