@@ -115,6 +115,7 @@
     setTimeout(function(){ t.className = 'toast'; }, 4000);
   }
   function fmt1(n){ return Number(n).toFixed(1); }
+  function fmtQty(n){ return Number(n.toFixed(2)).toString(); }
   function esc(s){ return (s == null ? '' : String(s)).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
   function statTile(label, value, accent, id){
     return '<div class="stat-tile"><div class="stat-label">' + label + '</div><div class="stat-value"' + (id ? ' id="' + id + '"' : '') + (accent ? ' style="color:var(--accent);"' : '') + '>' + value + '</div></div>';
@@ -884,7 +885,7 @@
         '<div class="meal-items" data-meal-id="' + m.id + '"></div>' +
         '<div class="mini-form" style="margin-top:10px;align-items:flex-end;">' +
         '<div class="mini-field" style="flex:1;min-width:140px;"><label>Aliment</label><select class="mini-input new-item-food"></select></div>' +
-        '<div class="mini-field"><label>Grammage (g)</label><input class="mini-input new-item-qty" type="number" placeholder="150" style="width:80px;"></div>' +
+        '<div class="mini-field"><label class="new-item-qty-label">Grammage (g)</label><input class="mini-input new-item-qty" type="number" step="any" placeholder="150" style="width:80px;"></div>' +
         '<button class="btn add-item-btn" style="padding:8px 16px;font-size:12px;">+ Ajouter</button>' +
         '</div></div>';
     });
@@ -908,6 +909,21 @@
         opt.value = f.id; opt.textContent = f.name;
         sel.appendChild(opt);
       });
+      function updateQtyLabel(){
+        const block = sel.closest('.meal-block');
+        const label = block.querySelector('.new-item-qty-label');
+        const qtyInput = block.querySelector('.new-item-qty');
+        const food = coachFoods.find(function(f){ return f.id === sel.value; });
+        if (food && food.unit_label) {
+          label.textContent = 'Nombre de ' + food.unit_label + '(s)';
+          qtyInput.placeholder = '1';
+        } else {
+          label.textContent = 'Grammage (g)';
+          qtyInput.placeholder = '150';
+        }
+      }
+      sel.addEventListener('change', updateQtyLabel);
+      updateQtyLabel();
     });
 
     for (const m of (meals || [])) {
@@ -922,7 +938,9 @@
         const foodId = block.querySelector('.new-item-food').value;
         const qty = parseFloat(block.querySelector('.new-item-qty').value);
         if (!foodId || isNaN(qty) || qty <= 0) { toast('Choisis un aliment et une quantité.', true); return; }
-        const { error } = await supabaseClient.from('meal_items').insert({ meal_id: mealId, food_id: foodId, quantity_grams: qty });
+        const food = coachFoods.find(function(f){ return f.id === foodId; });
+        const grams = (food && food.unit_label && food.unit_weight) ? qty * food.unit_weight : qty;
+        const { error } = await supabaseClient.from('meal_items').insert({ meal_id: mealId, food_id: foodId, quantity_grams: grams });
         if (error) { toast(error.message, true); return; }
         await renderMealItems(block.querySelector('.meal-items'), mealId);
         block.querySelector('.new-item-qty').value = '';
@@ -959,18 +977,22 @@
       const factor = it.quantity_grams / 100;
       const p = f.protein_per_100g * factor, g = f.carbs_per_100g * factor, l = f.fat_per_100g * factor, kcal = f.kcal_per_100g * factor;
       totals.p += p; totals.g += g; totals.l += l; totals.kcal += kcal;
+      const isUnit = f.unit_label && f.unit_weight;
+      const displayQty = isUnit ? fmtQty(it.quantity_grams / f.unit_weight) : it.quantity_grams;
       html += '<div style="padding:6px 0;border-top:1px solid var(--border);">' +
         '<div class="row" style="font-size:12.5px;padding:0;gap:8px;border-top:none;">' +
           '<div style="flex:1;">' + esc(f.name) + '</div>' +
-          '<input class="mini-input item-qty" data-item="' + it.id + '" type="number" value="' + it.quantity_grams + '" style="width:60px;text-align:center;">' +
-          '<span style="color:var(--text-faint);">g</span>' +
+          '<input class="mini-input item-qty" data-item="' + it.id + '" data-unit-weight="' + (isUnit ? f.unit_weight : '') + '" type="number" step="any" value="' + displayQty + '" style="width:60px;text-align:center;">' +
+          '<span style="color:var(--text-faint);">' + (isUnit ? esc(f.unit_label) + '(s)' : 'g') + '</span>' +
           '<div style="width:70px;text-align:right;color:var(--text-dim);">' + kcal.toFixed(0) + ' kcal</div>' +
           '<button class="del-item-btn" data-item="' + it.id + '" title="Supprimer" style="background:none;border:none;color:var(--warn);cursor:pointer;font-size:17px;line-height:1;padding:2px 4px;">×</button>' +
         '</div>' +
-        '<div style="font-size:10.5px;color:var(--text-faint);padding:2px 0 0 2px;">' + p.toFixed(1) + 'g P · ' + g.toFixed(1) + 'g G · ' + l.toFixed(1) + 'g L</div>';
+        '<div style="font-size:10.5px;color:var(--text-faint);padding:2px 0 0 2px;">' + p.toFixed(1) + 'g P · ' + g.toFixed(1) + 'g G · ' + l.toFixed(1) + 'g L' + (isUnit ? ' · ' + it.quantity_grams.toFixed(0) + 'g au total' : '') + '</div>';
       (altsByItem[it.id] || []).forEach(function(a){
+        const altIsUnit = a.foods.unit_label && a.foods.unit_weight;
+        const altQtyText = altIsUnit ? fmtQty(a.quantity_grams / a.foods.unit_weight) + ' ' + a.foods.unit_label + '(s)' : a.quantity_grams + 'g';
         html += '<div class="row" style="font-size:11.5px;padding:4px 0 4px 14px;color:var(--text-dim);border-top:none;">' +
-          '<div style="flex:1;">OU ' + esc(a.foods.name) + ' — ' + a.quantity_grams + 'g</div>' +
+          '<div style="flex:1;">OU ' + esc(a.foods.name) + ' — ' + altQtyText + '</div>' +
           '<button class="del-alt-btn" data-alt="' + a.id + '" title="Supprimer" style="background:none;border:none;color:var(--warn);cursor:pointer;font-size:15px;line-height:1;padding:2px 4px;">×</button>' +
         '</div>';
       });
@@ -990,12 +1012,21 @@
         opt.value = f.id; opt.textContent = f.name;
         sel.appendChild(opt);
       });
+      function updateAltPlaceholder(){
+        const qtyInput = el.querySelector('.new-alt-qty[data-item="' + sel.dataset.item + '"]');
+        const food = coachFoods.find(function(f){ return f.id === sel.value; });
+        qtyInput.placeholder = (food && food.unit_label) ? food.unit_label + '(s)' : 'g';
+      }
+      sel.addEventListener('change', updateAltPlaceholder);
+      updateAltPlaceholder();
     });
 
     el.querySelectorAll('.item-qty').forEach(function(input){
       input.addEventListener('change', async function(){
-        const newQty = parseFloat(this.value);
-        if (isNaN(newQty) || newQty <= 0) { toast('Grammage invalide.', true); return; }
+        const entered = parseFloat(this.value);
+        if (isNaN(entered) || entered <= 0) { toast('Quantité invalide.', true); return; }
+        const unitWeight = parseFloat(this.dataset.unitWeight);
+        const newQty = !isNaN(unitWeight) ? entered * unitWeight : entered;
         const { error } = await supabaseClient.from('meal_items').update({ quantity_grams: newQty }).eq('id', this.dataset.item);
         if (error) { toast(error.message, true); return; }
         await renderMealItems(el, mealId);
@@ -1028,7 +1059,9 @@
         const foodId = foodSel.value;
         const qty = parseFloat(qtyInput.value);
         if (!foodId || isNaN(qty) || qty <= 0) { toast('Choisis un aliment et une quantité.', true); return; }
-        const { error } = await supabaseClient.from('meal_item_alternatives').insert({ meal_item_id: itemId, food_id: foodId, quantity_grams: qty });
+        const altFood = coachFoods.find(function(f){ return f.id === foodId; });
+        const altGrams = (altFood && altFood.unit_label && altFood.unit_weight) ? qty * altFood.unit_weight : qty;
+        const { error } = await supabaseClient.from('meal_item_alternatives').insert({ meal_item_id: itemId, food_id: foodId, quantity_grams: altGrams });
         if (error) { toast(error.message, true); return; }
         toast('Équivalence ajoutée.');
         await renderMealItems(el, mealId);

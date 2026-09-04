@@ -140,6 +140,7 @@
   }
 
   function fmt1(n){ return Number(n).toFixed(1); }
+  function fmtQty(n){ return Number(n.toFixed(2)).toString(); }
 
   const MUSCLE_GROUPS = ['Quadriceps', 'Ischio-jambiers', 'Fessiers', 'Mollets', 'Pectoraux', 'Dorsaux', 'Trapèzes', 'Lombaires', 'Épaules', 'Biceps', 'Triceps', 'Abdominaux'];
   const MUSCLE_KEYWORDS = [
@@ -615,12 +616,16 @@
           const factor = it.quantity_grams / 100;
           const p = f.protein_per_100g * factor, g = f.carbs_per_100g * factor, l = f.fat_per_100g * factor, kcal = f.kcal_per_100g * factor;
           dayTotals.p += p; dayTotals.g += g; dayTotals.l += l; dayTotals.kcal += kcal;
+          const isUnit = f.unit_label && f.unit_weight;
+          const qtyText = isUnit ? fmtQty(it.quantity_grams / f.unit_weight) + ' ' + f.unit_label + '(s)' : it.quantity_grams + 'g';
           html += '<div style="padding:6px 0;border-top:1px solid var(--border);">' +
-            '<div class="row" style="font-size:13px;padding:0;border-top:none;"><div style="flex:1;">' + esc(f.name) + '</div><div style="width:60px;color:var(--text-dim);">' + it.quantity_grams + 'g</div><div style="width:80px;text-align:right;color:var(--text-dim);">' + kcal.toFixed(0) + ' kcal</div></div>' +
+            '<div class="row" style="font-size:13px;padding:0;border-top:none;"><div style="flex:1;">' + esc(f.name) + '</div><div style="width:70px;color:var(--text-dim);">' + qtyText + '</div><div style="width:80px;text-align:right;color:var(--text-dim);">' + kcal.toFixed(0) + ' kcal</div></div>' +
             '<div style="font-size:10.5px;color:var(--text-faint);padding:2px 0 0 2px;">' + p.toFixed(1) + 'g P · ' + g.toFixed(1) + 'g G · ' + l.toFixed(1) + 'g L</div>' +
           '</div>';
           (altsByItem[it.id] || []).forEach(function(a){
-            html += '<div style="font-size:11.5px;color:var(--text-faint);padding:2px 0 2px 14px;">OU ' + esc(a.foods.name) + ' — ' + a.quantity_grams + 'g</div>';
+            const altIsUnit = a.foods.unit_label && a.foods.unit_weight;
+            const altQtyText = altIsUnit ? fmtQty(a.quantity_grams / a.foods.unit_weight) + ' ' + a.foods.unit_label + '(s)' : a.quantity_grams + 'g';
+            html += '<div style="font-size:11.5px;color:var(--text-faint);padding:2px 0 2px 14px;">OU ' + esc(a.foods.name) + ' — ' + altQtyText + '</div>';
           });
         });
         html += '</div>';
