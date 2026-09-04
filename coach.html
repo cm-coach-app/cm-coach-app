@@ -131,33 +131,45 @@
 
   const MUSCLE_GROUPS = ['Quadriceps', 'Ischio-jambiers', 'Fessiers', 'Mollets', 'Pectoraux', 'Dos', 'Épaules', 'Biceps', 'Triceps', 'Abdominaux'];
   const MUSCLE_KEYWORDS = [
-    { group: 'Quadriceps', keywords: ['presse a cuisse', 'presse à cuisse', 'leg extension', 'squat', 'fente', 'quadriceps', 'hack squat', 'sissy squat'] },
-    { group: 'Ischio-jambiers', keywords: ['leg curl', 'ischio', 'jambes tendues', 'romanian', 'rdl', 'souleve de terre roumain', 'soulevé de terre roumain'] },
-    { group: 'Fessiers', keywords: ['fessier', 'hip thrust', 'glute'] },
-    { group: 'Mollets', keywords: ['mollet', 'calf'] },
-    { group: 'Pectoraux', keywords: ['developpe couche', 'développé couché', 'developpe incline', 'développé incliné', 'pectoraux', 'ecarte', 'écarté', 'dips', 'pec deck', 'pull-over', 'pull over'] },
-    { group: 'Dos', keywords: ['tirage', 'rowing', 'row', 'traction', 'pull-up', 'pulldown', 'lat', 'souleve de terre', 'soulevé de terre', 'dos'] },
-    { group: 'Épaules', keywords: ['epaule', 'épaule', 'developpe militaire', 'développé militaire', 'elevation', 'élévation', 'shoulder', 'overhead press', 'oiseau'] },
-    { group: 'Biceps', keywords: ['curl biceps', 'curl marteau', 'biceps'] },
-    { group: 'Triceps', keywords: ['triceps', 'barre au front', 'pushdown', 'skull crusher', 'dips triceps'] },
-    { group: 'Abdominaux', keywords: ['abdo', 'crunch', 'gainage', 'planche', 'obliques'] }
+    { groups: ['Quadriceps', 'Fessiers'], keywords: ['squat', 'gobelet squat', 'goblet squat', 'fente', 'hack squat', 'sissy squat', 'presse a cuisse', 'presse à cuisse'] },
+    { groups: ['Quadriceps'], keywords: ['leg extension', 'quadriceps'] },
+    { groups: ['Ischio-jambiers'], keywords: ['leg curl', 'ischio'] },
+    { groups: ['Ischio-jambiers', 'Fessiers', 'Dos'], keywords: ['souleve de terre', 'soulevé de terre', 'deadlift', 'romanian', 'rdl', 'jambes tendues'] },
+    { groups: ['Fessiers'], keywords: ['fessier', 'hip thrust', 'glute'] },
+    { groups: ['Mollets'], keywords: ['mollet', 'calf'] },
+    { groups: ['Pectoraux', 'Triceps', 'Épaules'], keywords: ['developpe couche', 'développé couché', 'developpe incline', 'développé incliné', 'bench press'] },
+    { groups: ['Pectoraux'], keywords: ['pectoraux', 'ecarte', 'écarté', 'pec deck'] },
+    { groups: ['Pectoraux', 'Triceps'], keywords: ['dips'] },
+    { groups: ['Dos'], keywords: ['pull-over', 'pull over'] },
+    { groups: ['Dos', 'Biceps'], keywords: ['tirage', 'rowing', 'row', 'traction', 'pull-up', 'pulldown', 'lat'] },
+    { groups: ['Épaules', 'Triceps'], keywords: ['developpe militaire', 'développé militaire', 'overhead press', 'shoulder press'] },
+    { groups: ['Épaules'], keywords: ['epaule', 'épaule', 'elevation', 'élévation', 'oiseau', 'shoulder'] },
+    { groups: ['Biceps'], keywords: ['curl biceps', 'curl marteau', 'biceps'] },
+    { groups: ['Triceps'], keywords: ['triceps', 'barre au front', 'pushdown', 'skull crusher'] },
+    { groups: ['Abdominaux'], keywords: ['abdo', 'crunch', 'gainage', 'planche', 'obliques'] }
   ];
-  function detectMuscleGroup(name){
+  function detectMuscleGroups(name){
     const n = (name || '').toLowerCase();
-    for (const entry of MUSCLE_KEYWORDS) {
-      for (const kw of entry.keywords) {
-        if (n.indexOf(kw) !== -1) return entry.group;
-      }
-    }
-    return null;
+    const found = [];
+    MUSCLE_KEYWORDS.forEach(function(entry){
+      entry.keywords.forEach(function(kw){
+        if (n.indexOf(kw) !== -1) {
+          entry.groups.forEach(function(g){ if (found.indexOf(g) === -1) found.push(g); });
+        }
+      });
+    });
+    return found;
   }
-  function muscleGroupOptions(current){
-    return '<option value="">Groupe musculaire</option>' + MUSCLE_GROUPS.map(function(g){ return '<option value="' + g + '"' + (g === current ? ' selected' : '') + '>' + g + '</option>'; }).join('');
+  function muscleChipsHtml(exId, active){
+    return MUSCLE_GROUPS.map(function(g){
+      const on = (active || []).indexOf(g) !== -1;
+      return '<span class="filter-chip muscle-chip' + (on ? ' active' : '') + '" data-id="' + exId + '" data-group="' + g + '" style="cursor:pointer;padding:4px 9px;font-size:10.5px;">' + g + '</span>';
+    }).join('');
   }
   async function computeVolumeTable(sessions, week){
     const sessionIds = (sessions || []).map(function(s){ return s.id; });
     if (!sessionIds.length) return MUSCLE_GROUPS.map(function(g){ return { group: g, volume: 0, freq: 0 }; });
-    const { data: exs } = await supabaseClient.from('exercises').select('id, session_id, name, muscle_group').in('session_id', sessionIds);
+    const { data: exs } = await supabaseClient.from('exercises').select('id, session_id, name, muscle_groups').in('session_id', sessionIds);
     const exIds = (exs || []).map(function(e){ return e.id; });
     const { data: targetData } = exIds.length
       ? await supabaseClient.from('exercise_targets').select('exercise_id, target_series').in('exercise_id', exIds).eq('week', week)
@@ -165,13 +177,15 @@
     const volume = {}; const freqSessions = {};
     MUSCLE_GROUPS.forEach(function(g){ volume[g] = 0; freqSessions[g] = new Set(); });
     (exs || []).forEach(function(ex){
-      const g = ex.muscle_group || detectMuscleGroup(ex.name);
-      if (!g || MUSCLE_GROUPS.indexOf(g) === -1) return;
+      const groups = (ex.muscle_groups && ex.muscle_groups.length) ? ex.muscle_groups : detectMuscleGroups(ex.name);
       const t = (targetData || []).find(function(x){ return x.exercise_id === ex.id; });
       const series = t && t.target_series != null ? t.target_series : 0;
       if (series > 0) {
-        volume[g] += series;
-        freqSessions[g].add(ex.session_id);
+        groups.forEach(function(g){
+          if (MUSCLE_GROUPS.indexOf(g) === -1) return;
+          volume[g] += series;
+          freqSessions[g].add(ex.session_id);
+        });
       }
     });
     return MUSCLE_GROUPS.map(function(g){ return { group: g, volume: volume[g], freq: freqSessions[g].size }; });
@@ -532,11 +546,11 @@
 
   async function renderExercises(body, session, onUpdate){
     const { data: exercises } = await supabaseClient.from('exercises').select('*').eq('session_id', session.id).order('exercise_order', { ascending: true });
-    const toBackfill = (exercises || []).map(function(e){ return { ex: e, detected: !e.muscle_group ? detectMuscleGroup(e.name) : null }; }).filter(function(x){ return x.detected; });
+    const toBackfill = (exercises || []).map(function(e){ return { ex: e, detected: (!e.muscle_groups || !e.muscle_groups.length) ? detectMuscleGroups(e.name) : null }; }).filter(function(x){ return x.detected && x.detected.length; });
     if (toBackfill.length) {
       await Promise.all(toBackfill.map(function(x){
-        x.ex.muscle_group = x.detected;
-        return supabaseClient.from('exercises').update({ muscle_group: x.detected }).eq('id', x.ex.id);
+        x.ex.muscle_groups = x.detected;
+        return supabaseClient.from('exercises').update({ muscle_groups: x.detected }).eq('id', x.ex.id);
       }));
     }
     const exIds = (exercises || []).map(function(e){ return e.id; });
@@ -559,25 +573,38 @@
     function exerciseById(exId){ return (exercises || []).find(function(e){ return e.id === exId; }); }
     function normLabel(s){ return (s || '').trim().toLowerCase(); }
     function groupFor(ex){
-      const key = normLabel(ex.superset_label);
-      if (!key) return [];
-      return (exercises || []).filter(function(e){ return normLabel(e.superset_label) === key; });
+      const exLabel = normLabel(ex.superset_label);
+      const exName = normLabel(ex.name);
+      return (exercises || []).filter(function(other){
+        if (other.id === ex.id) return true;
+        const otherLabel = normLabel(other.superset_label);
+        const otherName = normLabel(other.name);
+        if (exLabel && otherLabel && exLabel === otherLabel) return true;
+        if (exLabel && otherName && exLabel === otherName) return true;
+        if (otherLabel && exName && otherLabel === exName) return true;
+        return false;
+      });
     }
 
     const SUPERSET_COLORS = ['#C77DFF', '#7FB8E0', '#FF8562', '#4ADE80', '#F7C725'];
     const supersetColor = {};
     (function(){
-      const seen = {};
       let colorIdx = 0;
       (exercises || []).forEach(function(ex){
-        const key = normLabel(ex.superset_label);
-        if (!key || groupFor(ex).length < 2) return;
-        if (!(key in seen)) { seen[key] = SUPERSET_COLORS[colorIdx % SUPERSET_COLORS.length]; colorIdx++; }
-        supersetColor[ex.id] = seen[key];
+        if (supersetColor[ex.id]) return;
+        const group = groupFor(ex);
+        if (group.length < 2) return;
+        const color = SUPERSET_COLORS[colorIdx % SUPERSET_COLORS.length];
+        colorIdx++;
+        group.forEach(function(e){ supersetColor[e.id] = color; });
       });
     })();
-    const supersetLabelsInSession = Array.from(new Set((exercises || []).map(function(e){ return (e.superset_label || '').trim(); }).filter(Boolean)));
-    const supersetDatalist = '<datalist id="superset-labels">' + supersetLabelsInSession.map(function(l){ return '<option value="' + esc(l) + '">'; }).join('') + '</datalist>';
+    const supersetSuggestions = Array.from(new Set(
+      (exercises || []).map(function(e){ return (e.superset_label || '').trim(); })
+        .concat((exercises || []).map(function(e){ return (e.name || '').trim(); }))
+        .filter(Boolean)
+    ));
+    const supersetDatalist = '<datalist id="superset-labels">' + supersetSuggestions.map(function(l){ return '<option value="' + esc(l) + '">'; }).join('') + '</datalist>';
 
     let html = '';
     (exercises || []).forEach(function(ex){
@@ -608,7 +635,7 @@
         (photo ? '<a href="' + esc(photo.photo_url) + '" target="_blank" rel="noopener" title="Voir la photo de la plaque" style="width:30px;height:30px;border-radius:7px;overflow:hidden;flex:none;border:1px solid var(--border);"><img src="' + esc(photo.photo_url) + '" style="width:100%;height:100%;object-fit:cover;"></a>' : '<span title="Pas de photo" style="width:30px;height:30px;border-radius:7px;flex:none;border:1px solid var(--border);background:var(--surface-3);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-faint);"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>') +
         '<input class="mini-input ex-name" data-id="' + ex.id + '" type="text" value="' + esc(ex.name) + '" style="flex:1;min-width:120px;font-weight:600;">' +
         (ex.youtube_url ? '<a href="' + esc(ex.youtube_url) + '" target="_blank" rel="noopener" title="Voir la vidéo" style="color:var(--accent);flex:none;font-size:15px;text-decoration:none;">▶</a>' : '') +
-        (sColor ? ' <span style="font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:999px;background:' + sColor + '22;color:' + sColor + ';">SUPERSET ' + esc(ex.superset_label.trim().toUpperCase()) + (groupMates.length ? ' · ' + groupMates.map(function(e){ return esc(e.name); }).join(', ') : '') + '</span>' : '') +
+        (sColor ? ' <span style="font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:999px;background:' + sColor + '22;color:' + sColor + ';">SUPERSET' + (groupMates.length ? ' · ' + groupMates.map(function(e){ return esc(e.name); }).join(', ') : '') + '</span>' : '') +
         '<button class="del-ex-btn" data-id="' + ex.id + '" title="Supprimer l\'exercice" style="background:none;border:none;color:var(--warn);cursor:pointer;font-size:18px;line-height:1;padding:2px 4px;flex:none;">×</button>' +
         '</div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:8px;">' +
@@ -616,9 +643,9 @@
         '<input class="mini-input ex-reps" data-id="' + ex.id + '" type="number" value="' + (t && t.target_reps != null ? t.target_reps : '') + '" placeholder="reps" style="width:64px;text-align:center;">' +
         '<input class="mini-input ex-charge" data-id="' + ex.id + '" type="number" step="0.5" value="' + (t && t.target_charge != null ? t.target_charge : '') + '" placeholder="kg" style="width:70px;text-align:center;">' +
         '<input class="mini-input ex-rest" data-id="' + ex.id + '" type="text" value="' + esc(t && t.target_rest != null ? t.target_rest : '') + '" placeholder="repos' + (sColor ? ' (commun)' : '') + '" style="width:' + (sColor ? '100' : '80') + 'px;text-align:center;">' +
-        '<input class="mini-input ex-superset-label" list="superset-labels" data-id="' + ex.id + '" type="text" value="' + esc(ex.superset_label || '') + '" placeholder="Superset (ex: A)" style="width:110px;text-align:center;">' +
-        '<select class="mini-input ex-muscle" data-id="' + ex.id + '" style="width:140px;">' + muscleGroupOptions(ex.muscle_group) + '</select>' +
+        '<input class="mini-input ex-superset-label" list="superset-labels" data-id="' + ex.id + '" type="text" value="' + esc(ex.superset_label || '') + '" placeholder="Superset : nom du partenaire" style="width:170px;text-align:center;">' +
         '</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:5px;">' + muscleChipsHtml(ex.id, ex.muscle_groups) + '</div>' +
         '<input class="mini-input ex-youtube" data-id="' + ex.id + '" type="url" value="' + esc(ex.youtube_url || '') + '" placeholder="Lien YouTube (optionnel)" style="font-size:11.5px;">' +
         (realiseLine ? '<div style="font-size:11px;' + (hasLog ? 'color:var(--text-dim);' : 'color:var(--text-faint);font-style:italic;') + '">' + realiseLine + '</div>' : '') +
       '</div>';
@@ -630,10 +657,13 @@
       '<div class="mini-field"><label>Reps cible (S' + currentWeek + ')</label><input class="new-ex-reps" type="number" style="width:90px;"></div>' +
       '<div class="mini-field"><label>Charge (kg)</label><input class="new-ex-charge" type="number" step="0.5" style="width:80px;"></div>' +
       '<div class="mini-field"><label>Repos</label><input class="new-ex-rest" type="text" placeholder="Ex: 1\'30" style="width:90px;"></div>' +
-      '<div class="mini-field"><label>Superset (nom)</label><input class="new-ex-superset-label" list="superset-labels" type="text" placeholder="Ex: A" style="width:100px;"></div>' +
-      '<div class="mini-field"><label>Groupe musculaire</label><select class="new-ex-muscle" style="width:150px;">' + muscleGroupOptions(null) + '</select></div>' +
+      '<div class="mini-field"><label>Superset : nom du partenaire</label><input class="new-ex-superset-label" list="superset-labels" type="text" placeholder="Ex: Goblet squat" style="width:170px;"></div>' +
       '<div class="mini-field" style="flex:1;min-width:160px;"><label>Lien YouTube (optionnel)</label><input class="new-ex-youtube" type="url" placeholder="https://youtube.com/..."></div>' +
       '<button class="btn add-ex-btn" style="padding:9px 16px;">+ Ajouter</button></div>';
+    html += '<div class="mini-field" style="margin-top:8px;">' +
+      '<label>Groupe(s) musculaire(s) du nouvel exercice</label>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px;">' + muscleChipsHtml('new', []) + '</div>' +
+    '</div>';
     body.innerHTML = html;
 
     body.querySelectorAll('.ex-series, .ex-reps, .ex-charge, .ex-rest').forEach(function(input){
@@ -685,13 +715,16 @@
       });
     });
 
-    body.querySelectorAll('.ex-muscle').forEach(function(sel){
-      sel.addEventListener('change', async function(){
+    body.querySelectorAll('.muscle-chip').forEach(function(chip){
+      chip.addEventListener('click', async function(){
         const id = this.dataset.id;
-        const group = this.value || null;
-        const { error } = await supabaseClient.from('exercises').update({ muscle_group: group }).eq('id', id);
+        this.classList.toggle('active');
+        if (id === 'new') return;
+        const active = [];
+        body.querySelectorAll('.muscle-chip[data-id="' + id + '"].active').forEach(function(c){ active.push(c.dataset.group); });
+        const { error } = await supabaseClient.from('exercises').update({ muscle_groups: active.length ? active : null }).eq('id', id);
         if (error) { toast(error.message, true); return; }
-        toast(group ? 'Groupe musculaire enregistré.' : 'Groupe musculaire retiré.');
+        toast('Groupes musculaires mis à jour.');
         if (onUpdate) await onUpdate();
       });
     });
@@ -728,9 +761,16 @@
       });
     });
 
+    let newExMuscleTouched = false;
+    body.querySelectorAll('.muscle-chip[data-id="new"]').forEach(function(chip){
+      chip.addEventListener('click', function(){ newExMuscleTouched = true; });
+    });
     body.querySelector('.new-ex-name').addEventListener('input', function(){
-      const detected = detectMuscleGroup(this.value);
-      if (detected) body.querySelector('.new-ex-muscle').value = detected;
+      if (newExMuscleTouched) return;
+      const detected = detectMuscleGroups(this.value);
+      body.querySelectorAll('.muscle-chip[data-id="new"]').forEach(function(chip){
+        chip.classList.toggle('active', detected.indexOf(chip.dataset.group) !== -1);
+      });
     });
 
     body.querySelector('.add-ex-btn').addEventListener('click', async function(){
@@ -740,11 +780,13 @@
       const charge = body.querySelector('.new-ex-charge').value === '' ? null : parseFloat(body.querySelector('.new-ex-charge').value);
       const rest = body.querySelector('.new-ex-rest').value.trim() === '' ? null : body.querySelector('.new-ex-rest').value.trim();
       const supersetLabel = body.querySelector('.new-ex-superset-label').value.trim() || null;
-      const muscleGroup = body.querySelector('.new-ex-muscle').value || detectMuscleGroup(name);
+      const chosenMuscles = [];
+      body.querySelectorAll('.muscle-chip[data-id="new"].active').forEach(function(c){ chosenMuscles.push(c.dataset.group); });
+      const muscleGroups = chosenMuscles.length ? chosenMuscles : detectMuscleGroups(name);
       const youtubeUrl = body.querySelector('.new-ex-youtube').value.trim() || null;
       if (!name) { toast('Donne un nom à l\'exercice.', true); return; }
       const order = (exercises ? exercises.length : 0) + 1;
-      const { data: newEx, error } = await supabaseClient.from('exercises').insert({ session_id: session.id, name: name, exercise_order: order, youtube_url: youtubeUrl, superset_label: supersetLabel, muscle_group: muscleGroup }).select().single();
+      const { data: newEx, error } = await supabaseClient.from('exercises').insert({ session_id: session.id, name: name, exercise_order: order, youtube_url: youtubeUrl, superset_label: supersetLabel, muscle_groups: muscleGroups.length ? muscleGroups : null }).select().single();
       if (error) { toast(error.message, true); return; }
       if (series !== null || reps !== null || charge !== null || rest !== null) {
         await supabaseClient.from('exercise_targets').insert({ exercise_id: newEx.id, week: currentWeek, target_series: series, target_reps: reps, target_charge: charge, target_rest: rest });

@@ -143,30 +143,39 @@
 
   const MUSCLE_GROUPS = ['Quadriceps', 'Ischio-jambiers', 'Fessiers', 'Mollets', 'Pectoraux', 'Dos', 'Épaules', 'Biceps', 'Triceps', 'Abdominaux'];
   const MUSCLE_KEYWORDS = [
-    { group: 'Quadriceps', keywords: ['presse a cuisse', 'presse à cuisse', 'leg extension', 'squat', 'fente', 'quadriceps', 'hack squat', 'sissy squat'] },
-    { group: 'Ischio-jambiers', keywords: ['leg curl', 'ischio', 'jambes tendues', 'romanian', 'rdl', 'souleve de terre roumain', 'soulevé de terre roumain'] },
-    { group: 'Fessiers', keywords: ['fessier', 'hip thrust', 'glute'] },
-    { group: 'Mollets', keywords: ['mollet', 'calf'] },
-    { group: 'Pectoraux', keywords: ['developpe couche', 'développé couché', 'developpe incline', 'développé incliné', 'pectoraux', 'ecarte', 'écarté', 'dips', 'pec deck', 'pull-over', 'pull over'] },
-    { group: 'Dos', keywords: ['tirage', 'rowing', 'row', 'traction', 'pull-up', 'pulldown', 'lat', 'souleve de terre', 'soulevé de terre', 'dos'] },
-    { group: 'Épaules', keywords: ['epaule', 'épaule', 'developpe militaire', 'développé militaire', 'elevation', 'élévation', 'shoulder', 'overhead press', 'oiseau'] },
-    { group: 'Biceps', keywords: ['curl biceps', 'curl marteau', 'biceps'] },
-    { group: 'Triceps', keywords: ['triceps', 'barre au front', 'pushdown', 'skull crusher', 'dips triceps'] },
-    { group: 'Abdominaux', keywords: ['abdo', 'crunch', 'gainage', 'planche', 'obliques'] }
+    { groups: ['Quadriceps', 'Fessiers'], keywords: ['squat', 'gobelet squat', 'goblet squat', 'fente', 'hack squat', 'sissy squat', 'presse a cuisse', 'presse à cuisse'] },
+    { groups: ['Quadriceps'], keywords: ['leg extension', 'quadriceps'] },
+    { groups: ['Ischio-jambiers'], keywords: ['leg curl', 'ischio'] },
+    { groups: ['Ischio-jambiers', 'Fessiers', 'Dos'], keywords: ['souleve de terre', 'soulevé de terre', 'deadlift', 'romanian', 'rdl', 'jambes tendues'] },
+    { groups: ['Fessiers'], keywords: ['fessier', 'hip thrust', 'glute'] },
+    { groups: ['Mollets'], keywords: ['mollet', 'calf'] },
+    { groups: ['Pectoraux', 'Triceps', 'Épaules'], keywords: ['developpe couche', 'développé couché', 'developpe incline', 'développé incliné', 'bench press'] },
+    { groups: ['Pectoraux'], keywords: ['pectoraux', 'ecarte', 'écarté', 'pec deck'] },
+    { groups: ['Pectoraux', 'Triceps'], keywords: ['dips'] },
+    { groups: ['Dos'], keywords: ['pull-over', 'pull over'] },
+    { groups: ['Dos', 'Biceps'], keywords: ['tirage', 'rowing', 'row', 'traction', 'pull-up', 'pulldown', 'lat'] },
+    { groups: ['Épaules', 'Triceps'], keywords: ['developpe militaire', 'développé militaire', 'overhead press', 'shoulder press'] },
+    { groups: ['Épaules'], keywords: ['epaule', 'épaule', 'elevation', 'élévation', 'oiseau', 'shoulder'] },
+    { groups: ['Biceps'], keywords: ['curl biceps', 'curl marteau', 'biceps'] },
+    { groups: ['Triceps'], keywords: ['triceps', 'barre au front', 'pushdown', 'skull crusher'] },
+    { groups: ['Abdominaux'], keywords: ['abdo', 'crunch', 'gainage', 'planche', 'obliques'] }
   ];
-  function detectMuscleGroup(name){
+  function detectMuscleGroups(name){
     const n = (name || '').toLowerCase();
-    for (const entry of MUSCLE_KEYWORDS) {
-      for (const kw of entry.keywords) {
-        if (n.indexOf(kw) !== -1) return entry.group;
-      }
-    }
-    return null;
+    const found = [];
+    MUSCLE_KEYWORDS.forEach(function(entry){
+      entry.keywords.forEach(function(kw){
+        if (n.indexOf(kw) !== -1) {
+          entry.groups.forEach(function(g){ if (found.indexOf(g) === -1) found.push(g); });
+        }
+      });
+    });
+    return found;
   }
   async function computeVolumeTable(sessions, week){
     const sessionIds = (sessions || []).map(function(s){ return s.id; });
     if (!sessionIds.length) return MUSCLE_GROUPS.map(function(g){ return { group: g, volume: 0, freq: 0 }; });
-    const { data: exs } = await supabaseClient.from('exercises').select('id, session_id, name, muscle_group').in('session_id', sessionIds);
+    const { data: exs } = await supabaseClient.from('exercises').select('id, session_id, name, muscle_groups').in('session_id', sessionIds);
     const exIds = (exs || []).map(function(e){ return e.id; });
     const { data: targetData } = exIds.length
       ? await supabaseClient.from('exercise_targets').select('exercise_id, target_series').in('exercise_id', exIds).eq('week', week)
@@ -174,13 +183,15 @@
     const volume = {}; const freqSessions = {};
     MUSCLE_GROUPS.forEach(function(g){ volume[g] = 0; freqSessions[g] = new Set(); });
     (exs || []).forEach(function(ex){
-      const g = ex.muscle_group || detectMuscleGroup(ex.name);
-      if (!g || MUSCLE_GROUPS.indexOf(g) === -1) return;
+      const groups = (ex.muscle_groups && ex.muscle_groups.length) ? ex.muscle_groups : detectMuscleGroups(ex.name);
       const t = (targetData || []).find(function(x){ return x.exercise_id === ex.id; });
       const series = t && t.target_series != null ? t.target_series : 0;
       if (series > 0) {
-        volume[g] += series;
-        freqSessions[g].add(ex.session_id);
+        groups.forEach(function(g){
+          if (MUSCLE_GROUPS.indexOf(g) === -1) return;
+          volume[g] += series;
+          freqSessions[g].add(ex.session_id);
+        });
       }
     });
     return MUSCLE_GROUPS.map(function(g){ return { group: g, volume: volume[g], freq: freqSessions[g].size }; });
@@ -465,20 +476,29 @@
 
     function normLabel(s){ return (s || '').trim().toLowerCase(); }
     function groupFor(ex){
-      const key = normLabel(ex.superset_label);
-      if (!key) return [];
-      return (exercises || []).filter(function(e){ return normLabel(e.superset_label) === key; });
+      const exLabel = normLabel(ex.superset_label);
+      const exName = normLabel(ex.name);
+      return (exercises || []).filter(function(other){
+        if (other.id === ex.id) return true;
+        const otherLabel = normLabel(other.superset_label);
+        const otherName = normLabel(other.name);
+        if (exLabel && otherLabel && exLabel === otherLabel) return true;
+        if (exLabel && otherName && exLabel === otherName) return true;
+        if (otherLabel && exName && otherLabel === exName) return true;
+        return false;
+      });
     }
     const SUPERSET_COLORS = ['#C77DFF', '#7FB8E0', '#FF8562', '#4ADE80', '#F7C725'];
     const supersetColor = {};
     (function(){
-      const seen = {};
       let colorIdx = 0;
       (exercises || []).forEach(function(ex){
-        const key = normLabel(ex.superset_label);
-        if (!key || groupFor(ex).length < 2) return;
-        if (!(key in seen)) { seen[key] = SUPERSET_COLORS[colorIdx % SUPERSET_COLORS.length]; colorIdx++; }
-        supersetColor[ex.id] = seen[key];
+        if (supersetColor[ex.id]) return;
+        const group = groupFor(ex);
+        if (group.length < 2) return;
+        const color = SUPERSET_COLORS[colorIdx % SUPERSET_COLORS.length];
+        colorIdx++;
+        group.forEach(function(e){ supersetColor[e.id] = color; });
       });
     })();
 
@@ -492,7 +512,7 @@
       const sColor = supersetColor[ex.id];
       const groupMates = groupFor(ex).filter(function(e){ return e.id !== ex.id; });
       html += '<div class="sub-card"' + (sColor ? ' style="border-left:3px solid ' + sColor + ';"' : '') + '>' +
-        (sColor ? '<div style="font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:999px;background:' + sColor + '22;color:' + sColor + ';display:inline-block;margin-bottom:8px;">⚡ SUPERSET ' + esc(ex.superset_label.trim().toUpperCase()) + (groupMates.length ? ' AVEC ' + groupMates.map(function(e){ return esc(e.name); }).join(', ').toUpperCase() : '') + ' · ENCHAÎNE SANS REPOS</div>' : '') +
+        (sColor ? '<div style="font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:999px;background:' + sColor + '22;color:' + sColor + ';display:inline-block;margin-bottom:8px;">⚡ SUPERSET' + (groupMates.length ? ' AVEC ' + groupMates.map(function(e){ return esc(e.name); }).join(', ').toUpperCase() : '') + ' · ENCHAÎNE SANS REPOS</div>' : '') +
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
         '<b>' + (ex.youtube_url ? '<a href="' + esc(ex.youtube_url) + '" target="_blank" rel="noopener" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--accent);">' + esc(ex.name) + ' ▶</a>' : esc(ex.name)) + '</b><span class="tag">Cible : ' + target + '</span></div>' +
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">' +
