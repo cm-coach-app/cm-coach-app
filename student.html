@@ -392,18 +392,22 @@
       ? await supabaseClient.from('exercise_photos').select('*').in('exercise_id', exIds)
       : { data: [] };
 
+    function normLabel(s){ return (s || '').trim().toLowerCase(); }
+    function groupFor(ex){
+      const key = normLabel(ex.superset_label);
+      if (!key) return [];
+      return (exercises || []).filter(function(e){ return normLabel(e.superset_label) === key; });
+    }
     const SUPERSET_COLORS = ['#C77DFF', '#7FB8E0', '#FF8562', '#4ADE80', '#F7C725'];
     const supersetColor = {};
     (function(){
+      const seen = {};
       let colorIdx = 0;
       (exercises || []).forEach(function(ex){
-        const partnerExists = ex.superset_with_id && (exercises || []).some(function(e){ return e.id === ex.superset_with_id; });
-        if (partnerExists && !supersetColor[ex.id]) {
-          const color = SUPERSET_COLORS[colorIdx % SUPERSET_COLORS.length];
-          supersetColor[ex.id] = color;
-          supersetColor[ex.superset_with_id] = color;
-          colorIdx++;
-        }
+        const key = normLabel(ex.superset_label);
+        if (!key || groupFor(ex).length < 2) return;
+        if (!(key in seen)) { seen[key] = SUPERSET_COLORS[colorIdx % SUPERSET_COLORS.length]; colorIdx++; }
+        supersetColor[ex.id] = seen[key];
       });
     })();
 
@@ -415,9 +419,9 @@
       const target = seriesCount + ' séries · ' + (t && t.target_reps != null ? t.target_reps : '?') + ' × ' + (t && t.target_charge != null ? t.target_charge + ' kg' : '—') +
         (t && t.target_rest ? ' · repos ' + esc(t.target_rest) : '');
       const sColor = supersetColor[ex.id];
-      const partnerEx = ex.superset_with_id ? (exercises || []).find(function(e){ return e.id === ex.superset_with_id; }) : null;
+      const groupMates = groupFor(ex).filter(function(e){ return e.id !== ex.id; });
       html += '<div class="sub-card"' + (sColor ? ' style="border-left:3px solid ' + sColor + ';"' : '') + '>' +
-        (sColor && partnerEx ? '<div style="font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:999px;background:' + sColor + '22;color:' + sColor + ';display:inline-block;margin-bottom:8px;">⚡ SUPERSET AVEC ' + esc(partnerEx.name).toUpperCase() + ' · ENCHAÎNE SANS REPOS</div>' : '') +
+        (sColor ? '<div style="font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:999px;background:' + sColor + '22;color:' + sColor + ';display:inline-block;margin-bottom:8px;">⚡ SUPERSET ' + esc(ex.superset_label.trim().toUpperCase()) + (groupMates.length ? ' AVEC ' + groupMates.map(function(e){ return esc(e.name); }).join(', ').toUpperCase() : '') + ' · ENCHAÎNE SANS REPOS</div>' : '') +
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
         '<b>' + (ex.youtube_url ? '<a href="' + esc(ex.youtube_url) + '" target="_blank" rel="noopener" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--accent);">' + esc(ex.name) + ' ▶</a>' : esc(ex.name)) + '</b><span class="tag">Cible : ' + target + '</span></div>' +
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">' +
