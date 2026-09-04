@@ -143,22 +143,22 @@
 
   const MUSCLE_GROUPS = ['Quadriceps', 'Ischio-jambiers', 'Fessiers', 'Mollets', 'Pectoraux', 'Dos', 'Épaules', 'Biceps', 'Triceps', 'Abdominaux'];
   const MUSCLE_KEYWORDS = [
-    { groups: ['Quadriceps', 'Fessiers'], keywords: ['squat', 'gobelet squat', 'goblet squat', 'fente', 'hack squat', 'sissy squat', 'presse a cuisse', 'presse à cuisse'] },
+    { groups: ['Quadriceps', 'Fessiers'], keywords: ['squat', 'gobelet squat', 'goblet squat', 'fente', 'hack squat', 'sissy squat', 'presse a cuisse', 'presse à cuisse', 'presse'] },
     { groups: ['Quadriceps'], keywords: ['leg extension', 'quadriceps'] },
     { groups: ['Ischio-jambiers'], keywords: ['leg curl', 'ischio'] },
-    { groups: ['Ischio-jambiers', 'Fessiers', 'Dos'], keywords: ['souleve de terre', 'soulevé de terre', 'deadlift', 'romanian', 'rdl', 'jambes tendues'] },
+    { groups: ['Ischio-jambiers', 'Fessiers', 'Dos'], keywords: ['souleve de terre', 'soulevé de terre', 'deadlift', 'romanian', 'rdl', 'jambes tendues', 'good morning', 'hyperextension'] },
     { groups: ['Fessiers'], keywords: ['fessier', 'hip thrust', 'glute'] },
     { groups: ['Mollets'], keywords: ['mollet', 'calf'] },
     { groups: ['Pectoraux', 'Triceps', 'Épaules'], keywords: ['developpe couche', 'développé couché', 'developpe incline', 'développé incliné', 'bench press'] },
     { groups: ['Pectoraux'], keywords: ['pectoraux', 'ecarte', 'écarté', 'pec deck'] },
     { groups: ['Pectoraux', 'Triceps'], keywords: ['dips'] },
     { groups: ['Dos'], keywords: ['pull-over', 'pull over'] },
-    { groups: ['Dos', 'Biceps'], keywords: ['tirage', 'rowing', 'row', 'traction', 'pull-up', 'pulldown', 'lat'] },
+    { groups: ['Dos', 'Biceps'], keywords: ['tirage', 'rowing', 'row', 'traction', 'pull-up', 'pulldown', 'chin-up', 'chin up', 'lat'] },
     { groups: ['Épaules', 'Triceps'], keywords: ['developpe militaire', 'développé militaire', 'overhead press', 'shoulder press'] },
-    { groups: ['Épaules'], keywords: ['epaule', 'épaule', 'elevation', 'élévation', 'oiseau', 'shoulder'] },
-    { groups: ['Biceps'], keywords: ['curl biceps', 'curl marteau', 'biceps'] },
+    { groups: ['Épaules'], keywords: ['epaule', 'épaule', 'elevation', 'élévation', 'oiseau', 'shoulder', 'shrug', 'haussement'] },
+    { groups: ['Biceps'], keywords: ['curl biceps', 'curl marteau', 'biceps curl', 'biceps'] },
     { groups: ['Triceps'], keywords: ['triceps', 'barre au front', 'pushdown', 'skull crusher'] },
-    { groups: ['Abdominaux'], keywords: ['abdo', 'crunch', 'gainage', 'planche', 'obliques'] }
+    { groups: ['Abdominaux'], keywords: ['abdo', 'crunch', 'gainage', 'planche', 'obliques', 'russian twist', 'mountain climber'] }
   ];
   function detectMuscleGroups(name){
     const n = (name || '').toLowerCase();
