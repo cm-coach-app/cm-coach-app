@@ -207,6 +207,18 @@
     html += '</tbody></table></div>';
     return html;
   }
+  function calorieTarget(prof, weight){
+    if (!prof || prof.height_cm == null || prof.age == null || weight == null || isNaN(weight)) return null;
+    const sexe = prof.sex || 'f';
+    const activite = prof.activity_level != null ? prof.activity_level : 1.2;
+    const objectif = prof.calorie_objective_pct != null ? prof.calorie_objective_pct : 0;
+    const bmr = sexe === 'h'
+      ? (10 * weight) + (6.25 * prof.height_cm) - (5 * prof.age) + 5
+      : (10 * weight) + (6.25 * prof.height_cm) - (5 * prof.age) - 161;
+    const maintenance = bmr * activite;
+    const final = maintenance * (1 + objectif / 100);
+    return { bmr: bmr, maintenance: maintenance, final: final };
+  }
   function currentWeekFor(program){
     const days = Math.floor((Date.now() - new Date(program.start_date + 'T00:00:00')) / 86400000);
     return Math.max(1, Math.min(12, Math.floor(days / 7) + 1));
@@ -285,7 +297,7 @@
 
   // ---- Poids tab ----
   async function loadPoidsTab(el){
-    const { data: prof } = await supabaseClient.from('profiles').select('height_cm, age').eq('id', selectedId).single();
+    const { data: prof } = await supabaseClient.from('profiles').select('height_cm, age, sex, activity_level, calorie_objective_pct').eq('id', selectedId).single();
     const { data: goals } = await supabaseClient.from('weight_goals').select('*').eq('student_id', selectedId).maybeSingle();
     const { data: entries } = await supabaseClient.from('weight_entries').select('*').eq('student_id', selectedId).order('entry_date', { ascending: true });
     const history = entries || [];
@@ -319,10 +331,13 @@
     }
 
     const calWeight = history.length ? history[history.length - 1].weight : (goals ? goals.start_weight : '');
+    const savedSex = (prof && prof.sex) || 'f';
+    const savedActivite = (prof && prof.activity_level != null) ? String(prof.activity_level) : '1.2';
+    const savedObjectif = (prof && prof.calorie_objective_pct != null) ? String(prof.calorie_objective_pct) : '0';
     html += '<h4 style="margin:0 0 8px;font-size:13px;color:var(--text-dim);">Calculateur calorique</h4>' +
       '<div class="card" style="margin-bottom:20px;">' +
       '<div class="mini-form" style="margin-bottom:14px;">' +
-        '<div class="mini-field"><label>Sexe</label><select id="cal-sexe"><option value="f">Femme</option><option value="h">Homme</option></select></div>' +
+        '<div class="mini-field"><label>Sexe</label><select id="cal-sexe"><option value="f"' + (savedSex === 'f' ? ' selected' : '') + '>Femme</option><option value="h"' + (savedSex === 'h' ? ' selected' : '') + '>Homme</option></select></div>' +
         '<div class="mini-field"><label>Poids (kg)</label><input id="cal-poids" type="number" step="0.1" value="' + (calWeight === '' ? '' : fmt1(calWeight)) + '" style="width:90px;"></div>' +
         '<div class="mini-field"><label>Taille (cm)</label><input id="cal-taille" type="number" value="' + (prof && prof.height_cm != null ? prof.height_cm : '') + '" style="width:90px;"></div>' +
         '<div class="mini-field"><label>Âge</label><input id="cal-age" type="number" value="' + (prof && prof.age != null ? prof.age : '') + '" style="width:70px;"></div>' +
@@ -330,24 +345,24 @@
       '<div class="mini-form" style="margin-bottom:16px;">' +
         '<div class="mini-field" style="flex:1;min-width:230px;"><label>Niveau d\'activité</label>' +
           '<select id="cal-activite">' +
-            '<option value="1.1">Sédentaire — pas d\'activité physique</option>' +
-            '<option value="1.2">Légère — 1 à 2x / semaine</option>' +
-            '<option value="1.3">Modérée — 3 à 4x / semaine</option>' +
-            '<option value="1.4">Modérée — quotidienne</option>' +
-            '<option value="1.5">Intense — 6 à 7x / semaine</option>' +
+            '<option value="1.1"' + (savedActivite === '1.1' ? ' selected' : '') + '>Sédentaire — pas d\'activité physique</option>' +
+            '<option value="1.2"' + (savedActivite === '1.2' ? ' selected' : '') + '>Légère — 1 à 2x / semaine</option>' +
+            '<option value="1.3"' + (savedActivite === '1.3' ? ' selected' : '') + '>Modérée — 3 à 4x / semaine</option>' +
+            '<option value="1.4"' + (savedActivite === '1.4' ? ' selected' : '') + '>Modérée — quotidienne</option>' +
+            '<option value="1.5"' + (savedActivite === '1.5' ? ' selected' : '') + '>Intense — 6 à 7x / semaine</option>' +
           '</select>' +
         '</div>' +
         '<div class="mini-field" style="flex:1;min-width:190px;"><label>Objectif</label>' +
           '<select id="cal-objectif">' +
-            '<option value="0">Maintien</option>' +
-            '<option value="-5">Perte de poids -5%</option>' +
-            '<option value="-10">Perte de poids -10%</option>' +
-            '<option value="-15">Perte de poids -15%</option>' +
-            '<option value="-20">Perte de poids -20%</option>' +
-            '<option value="5">Prise de masse +5%</option>' +
-            '<option value="10">Prise de masse +10%</option>' +
-            '<option value="15">Prise de masse +15%</option>' +
-            '<option value="20">Prise de masse +20%</option>' +
+            '<option value="0"' + (savedObjectif === '0' ? ' selected' : '') + '>Maintien</option>' +
+            '<option value="-5"' + (savedObjectif === '-5' ? ' selected' : '') + '>Perte de poids -5%</option>' +
+            '<option value="-10"' + (savedObjectif === '-10' ? ' selected' : '') + '>Perte de poids -10%</option>' +
+            '<option value="-15"' + (savedObjectif === '-15' ? ' selected' : '') + '>Perte de poids -15%</option>' +
+            '<option value="-20"' + (savedObjectif === '-20' ? ' selected' : '') + '>Perte de poids -20%</option>' +
+            '<option value="5"' + (savedObjectif === '5' ? ' selected' : '') + '>Prise de masse +5%</option>' +
+            '<option value="10"' + (savedObjectif === '10' ? ' selected' : '') + '>Prise de masse +10%</option>' +
+            '<option value="15"' + (savedObjectif === '15' ? ' selected' : '') + '>Prise de masse +15%</option>' +
+            '<option value="20"' + (savedObjectif === '20' ? ' selected' : '') + '>Prise de masse +20%</option>' +
           '</select>' +
         '</div>' +
       '</div>' +
@@ -444,6 +459,18 @@
       document.getElementById(id).addEventListener('change', recalcCalories);
     });
     recalcCalories();
+
+    ['cal-sexe', 'cal-activite', 'cal-objectif'].forEach(function(id){
+      document.getElementById(id).addEventListener('change', async function(){
+        const { error } = await supabaseClient.from('profiles').update({
+          sex: document.getElementById('cal-sexe').value,
+          activity_level: parseFloat(document.getElementById('cal-activite').value),
+          calorie_objective_pct: parseInt(document.getElementById('cal-objectif').value, 10)
+        }).eq('id', selectedId);
+        if (error) { toast(error.message, true); return; }
+        toast('Calculateur enregistré.');
+      });
+    });
   }
 
   // ---- Shared: active program ----
@@ -777,6 +804,11 @@
     }
 
     const { data: days } = await supabaseClient.from('diet_days').select('*').eq('program_id', program.id).order('id', { ascending: true });
+    const { data: dietProf } = await supabaseClient.from('profiles').select('height_cm, age, sex, activity_level, calorie_objective_pct').eq('id', selectedId).single();
+    const { data: latestEntry } = await supabaseClient.from('weight_entries').select('weight').eq('student_id', selectedId).order('entry_date', { ascending: false }).limit(1).maybeSingle();
+    const { data: dietGoals } = await supabaseClient.from('weight_goals').select('start_weight').eq('student_id', selectedId).maybeSingle();
+    const dietCalWeight = latestEntry ? latestEntry.weight : (dietGoals ? dietGoals.start_weight : null);
+    const calTarget = calorieTarget(dietProf, dietCalWeight);
 
     el.innerHTML = '<div id="diet-days"></div>' +
       '<div class="mini-form" style="margin-top:10px;">' +
@@ -785,6 +817,16 @@
       '<div class="mini-field" style="margin-top:20px;">' +
       '<label>Notes générales (hydratation, compléments, etc.)</label>' +
       '<textarea id="diet-notes" rows="3" placeholder="Ex: Boire 2L d\'eau par jour. Prendre 1 gélule de probiotique le matin à jeun." style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;resize:vertical;">' + esc(program.diet_notes || '') + '</textarea>' +
+      '</div>' +
+      '<div class="card" style="margin-top:20px;">' +
+        '<h4 style="margin:0 0 4px;font-size:13.5px;">Objectif calorique quotidien</h4>' +
+        (calTarget
+          ? '<p style="margin:0 0 12px;font-size:11.5px;color:var(--text-dim);">Calculé depuis l\'onglet Poids (dernier poids, taille, âge, activité, objectif).</p>' +
+            '<div class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));">' +
+              statTile('Maintenance', Math.round(calTarget.maintenance) + ' kcal') +
+              statTile('Objectif à atteindre', Math.round(calTarget.final) + ' kcal', true) +
+            '</div>'
+          : '<p style="margin:0;font-size:12.5px;color:var(--text-dim);">Renseigne le calculateur calorique dans l\'onglet Poids (taille, âge, activité, objectif) pour voir le total ici.</p>') +
       '</div>';
 
     const daysWrap = document.getElementById('diet-days');
