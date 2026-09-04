@@ -130,13 +130,34 @@
   function dayTypeLabel(type){ return DAY_TYPE_LABELS[type] || type; }
 
   const MUSCLE_GROUPS = ['Quadriceps', 'Ischio-jambiers', 'Fessiers', 'Mollets', 'Pectoraux', 'Dos', 'Épaules', 'Biceps', 'Triceps', 'Abdominaux'];
+  const MUSCLE_KEYWORDS = [
+    { group: 'Quadriceps', keywords: ['presse a cuisse', 'presse à cuisse', 'leg extension', 'squat', 'fente', 'quadriceps', 'hack squat', 'sissy squat'] },
+    { group: 'Ischio-jambiers', keywords: ['leg curl', 'ischio', 'jambes tendues', 'romanian', 'rdl', 'souleve de terre roumain', 'soulevé de terre roumain'] },
+    { group: 'Fessiers', keywords: ['fessier', 'hip thrust', 'glute'] },
+    { group: 'Mollets', keywords: ['mollet', 'calf'] },
+    { group: 'Pectoraux', keywords: ['developpe couche', 'développé couché', 'developpe incline', 'développé incliné', 'pectoraux', 'ecarte', 'écarté', 'dips', 'pec deck', 'pull-over', 'pull over'] },
+    { group: 'Dos', keywords: ['tirage', 'rowing', 'row', 'traction', 'pull-up', 'pulldown', 'lat', 'souleve de terre', 'soulevé de terre', 'dos'] },
+    { group: 'Épaules', keywords: ['epaule', 'épaule', 'developpe militaire', 'développé militaire', 'elevation', 'élévation', 'shoulder', 'overhead press', 'oiseau'] },
+    { group: 'Biceps', keywords: ['curl biceps', 'curl marteau', 'biceps'] },
+    { group: 'Triceps', keywords: ['triceps', 'barre au front', 'pushdown', 'skull crusher', 'dips triceps'] },
+    { group: 'Abdominaux', keywords: ['abdo', 'crunch', 'gainage', 'planche', 'obliques'] }
+  ];
+  function detectMuscleGroup(name){
+    const n = (name || '').toLowerCase();
+    for (const entry of MUSCLE_KEYWORDS) {
+      for (const kw of entry.keywords) {
+        if (n.indexOf(kw) !== -1) return entry.group;
+      }
+    }
+    return null;
+  }
   function muscleGroupOptions(current){
     return '<option value="">Groupe musculaire</option>' + MUSCLE_GROUPS.map(function(g){ return '<option value="' + g + '"' + (g === current ? ' selected' : '') + '>' + g + '</option>'; }).join('');
   }
   async function computeVolumeTable(sessions, week){
     const sessionIds = (sessions || []).map(function(s){ return s.id; });
     if (!sessionIds.length) return MUSCLE_GROUPS.map(function(g){ return { group: g, volume: 0, freq: 0 }; });
-    const { data: exs } = await supabaseClient.from('exercises').select('id, session_id, muscle_group').in('session_id', sessionIds);
+    const { data: exs } = await supabaseClient.from('exercises').select('id, session_id, name, muscle_group').in('session_id', sessionIds);
     const exIds = (exs || []).map(function(e){ return e.id; });
     const { data: targetData } = exIds.length
       ? await supabaseClient.from('exercise_targets').select('exercise_id, target_series').in('exercise_id', exIds).eq('week', week)
@@ -144,7 +165,7 @@
     const volume = {}; const freqSessions = {};
     MUSCLE_GROUPS.forEach(function(g){ volume[g] = 0; freqSessions[g] = new Set(); });
     (exs || []).forEach(function(ex){
-      const g = ex.muscle_group;
+      const g = ex.muscle_group || detectMuscleGroup(ex.name);
       if (!g || MUSCLE_GROUPS.indexOf(g) === -1) return;
       const t = (targetData || []).find(function(x){ return x.exercise_id === ex.id; });
       const series = t && t.target_series != null ? t.target_series : 0;
@@ -511,6 +532,13 @@
 
   async function renderExercises(body, session, onUpdate){
     const { data: exercises } = await supabaseClient.from('exercises').select('*').eq('session_id', session.id).order('exercise_order', { ascending: true });
+    const toBackfill = (exercises || []).map(function(e){ return { ex: e, detected: !e.muscle_group ? detectMuscleGroup(e.name) : null }; }).filter(function(x){ return x.detected; });
+    if (toBackfill.length) {
+      await Promise.all(toBackfill.map(function(x){
+        x.ex.muscle_group = x.detected;
+        return supabaseClient.from('exercises').update({ muscle_group: x.detected }).eq('id', x.ex.id);
+      }));
+    }
     const exIds = (exercises || []).map(function(e){ return e.id; });
     const prevWeek = currentWeek - 1;
     let targets = [];
@@ -576,11 +604,11 @@
       const sColor = supersetColor[ex.id];
       const groupMates = groupFor(ex).filter(function(e){ return e.id !== ex.id; });
       html += '<div class="row" style="flex-direction:column;align-items:stretch;gap:6px;' + (sColor ? 'border-left:3px solid ' + sColor + ';padding-left:8px;' : '') + '">' +
-        '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
         (photo ? '<a href="' + esc(photo.photo_url) + '" target="_blank" rel="noopener" title="Voir la photo de la plaque" style="width:30px;height:30px;border-radius:7px;overflow:hidden;flex:none;border:1px solid var(--border);"><img src="' + esc(photo.photo_url) + '" style="width:100%;height:100%;object-fit:cover;"></a>' : '<span title="Pas de photo" style="width:30px;height:30px;border-radius:7px;flex:none;border:1px solid var(--border);background:var(--surface-3);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-faint);"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>') +
-        '<div style="flex:1;">' + (ex.youtube_url ? '<a href="' + esc(ex.youtube_url) + '" target="_blank" rel="noopener" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--accent);">' + esc(ex.name) + '</a>' : esc(ex.name)) +
-          (sColor ? ' <span style="font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:999px;background:' + sColor + '22;color:' + sColor + ';">SUPERSET ' + esc(ex.superset_label.trim().toUpperCase()) + (groupMates.length ? ' · ' + groupMates.map(function(e){ return esc(e.name); }).join(', ') : '') + '</span>' : '') +
-        '</div>' +
+        '<input class="mini-input ex-name" data-id="' + ex.id + '" type="text" value="' + esc(ex.name) + '" style="flex:1;min-width:120px;font-weight:600;">' +
+        (ex.youtube_url ? '<a href="' + esc(ex.youtube_url) + '" target="_blank" rel="noopener" title="Voir la vidéo" style="color:var(--accent);flex:none;font-size:15px;text-decoration:none;">▶</a>' : '') +
+        (sColor ? ' <span style="font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:999px;background:' + sColor + '22;color:' + sColor + ';">SUPERSET ' + esc(ex.superset_label.trim().toUpperCase()) + (groupMates.length ? ' · ' + groupMates.map(function(e){ return esc(e.name); }).join(', ') : '') + '</span>' : '') +
         '<button class="del-ex-btn" data-id="' + ex.id + '" title="Supprimer l\'exercice" style="background:none;border:none;color:var(--warn);cursor:pointer;font-size:18px;line-height:1;padding:2px 4px;flex:none;">×</button>' +
         '</div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:8px;">' +
@@ -668,6 +696,17 @@
       });
     });
 
+    body.querySelectorAll('.ex-name').forEach(function(input){
+      input.addEventListener('change', async function(){
+        const name = this.value.trim();
+        if (!name) { toast('Le nom ne peut pas être vide.', true); this.value = exerciseById(this.dataset.id).name; return; }
+        const { error } = await supabaseClient.from('exercises').update({ name: name }).eq('id', this.dataset.id);
+        if (error) { toast(error.message, true); return; }
+        toast('Nom mis à jour.');
+        await renderExercises(body, session, onUpdate);
+      });
+    });
+
     body.querySelectorAll('.del-ex-btn').forEach(function(btn){
       btn.addEventListener('click', async function(){
         if (!confirm('Supprimer cet exercice ? Cette action est définitive.')) return;
@@ -689,6 +728,11 @@
       });
     });
 
+    body.querySelector('.new-ex-name').addEventListener('input', function(){
+      const detected = detectMuscleGroup(this.value);
+      if (detected) body.querySelector('.new-ex-muscle').value = detected;
+    });
+
     body.querySelector('.add-ex-btn').addEventListener('click', async function(){
       const name = body.querySelector('.new-ex-name').value.trim();
       const series = body.querySelector('.new-ex-series').value === '' ? null : parseInt(body.querySelector('.new-ex-series').value, 10);
@@ -696,7 +740,7 @@
       const charge = body.querySelector('.new-ex-charge').value === '' ? null : parseFloat(body.querySelector('.new-ex-charge').value);
       const rest = body.querySelector('.new-ex-rest').value.trim() === '' ? null : body.querySelector('.new-ex-rest').value.trim();
       const supersetLabel = body.querySelector('.new-ex-superset-label').value.trim() || null;
-      const muscleGroup = body.querySelector('.new-ex-muscle').value || null;
+      const muscleGroup = body.querySelector('.new-ex-muscle').value || detectMuscleGroup(name);
       const youtubeUrl = body.querySelector('.new-ex-youtube').value.trim() || null;
       if (!name) { toast('Donne un nom à l\'exercice.', true); return; }
       const order = (exercises ? exercises.length : 0) + 1;

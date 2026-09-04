@@ -142,10 +142,31 @@
   function fmt1(n){ return Number(n).toFixed(1); }
 
   const MUSCLE_GROUPS = ['Quadriceps', 'Ischio-jambiers', 'Fessiers', 'Mollets', 'Pectoraux', 'Dos', 'Épaules', 'Biceps', 'Triceps', 'Abdominaux'];
+  const MUSCLE_KEYWORDS = [
+    { group: 'Quadriceps', keywords: ['presse a cuisse', 'presse à cuisse', 'leg extension', 'squat', 'fente', 'quadriceps', 'hack squat', 'sissy squat'] },
+    { group: 'Ischio-jambiers', keywords: ['leg curl', 'ischio', 'jambes tendues', 'romanian', 'rdl', 'souleve de terre roumain', 'soulevé de terre roumain'] },
+    { group: 'Fessiers', keywords: ['fessier', 'hip thrust', 'glute'] },
+    { group: 'Mollets', keywords: ['mollet', 'calf'] },
+    { group: 'Pectoraux', keywords: ['developpe couche', 'développé couché', 'developpe incline', 'développé incliné', 'pectoraux', 'ecarte', 'écarté', 'dips', 'pec deck', 'pull-over', 'pull over'] },
+    { group: 'Dos', keywords: ['tirage', 'rowing', 'row', 'traction', 'pull-up', 'pulldown', 'lat', 'souleve de terre', 'soulevé de terre', 'dos'] },
+    { group: 'Épaules', keywords: ['epaule', 'épaule', 'developpe militaire', 'développé militaire', 'elevation', 'élévation', 'shoulder', 'overhead press', 'oiseau'] },
+    { group: 'Biceps', keywords: ['curl biceps', 'curl marteau', 'biceps'] },
+    { group: 'Triceps', keywords: ['triceps', 'barre au front', 'pushdown', 'skull crusher', 'dips triceps'] },
+    { group: 'Abdominaux', keywords: ['abdo', 'crunch', 'gainage', 'planche', 'obliques'] }
+  ];
+  function detectMuscleGroup(name){
+    const n = (name || '').toLowerCase();
+    for (const entry of MUSCLE_KEYWORDS) {
+      for (const kw of entry.keywords) {
+        if (n.indexOf(kw) !== -1) return entry.group;
+      }
+    }
+    return null;
+  }
   async function computeVolumeTable(sessions, week){
     const sessionIds = (sessions || []).map(function(s){ return s.id; });
     if (!sessionIds.length) return MUSCLE_GROUPS.map(function(g){ return { group: g, volume: 0, freq: 0 }; });
-    const { data: exs } = await supabaseClient.from('exercises').select('id, session_id, muscle_group').in('session_id', sessionIds);
+    const { data: exs } = await supabaseClient.from('exercises').select('id, session_id, name, muscle_group').in('session_id', sessionIds);
     const exIds = (exs || []).map(function(e){ return e.id; });
     const { data: targetData } = exIds.length
       ? await supabaseClient.from('exercise_targets').select('exercise_id, target_series').in('exercise_id', exIds).eq('week', week)
@@ -153,7 +174,7 @@
     const volume = {}; const freqSessions = {};
     MUSCLE_GROUPS.forEach(function(g){ volume[g] = 0; freqSessions[g] = new Set(); });
     (exs || []).forEach(function(ex){
-      const g = ex.muscle_group;
+      const g = ex.muscle_group || detectMuscleGroup(ex.name);
       if (!g || MUSCLE_GROUPS.indexOf(g) === -1) return;
       const t = (targetData || []).find(function(x){ return x.exercise_id === ex.id; });
       const series = t && t.target_series != null ? t.target_series : 0;
