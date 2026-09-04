@@ -141,6 +141,50 @@
 
   function fmt1(n){ return Number(n).toFixed(1); }
 
+  const MUSCLE_GROUPS = ['Quadriceps', 'Ischio-jambiers', 'Fessiers', 'Mollets', 'Pectoraux', 'Dos', 'Épaules', 'Biceps', 'Triceps', 'Abdominaux'];
+  async function computeVolumeTable(sessions, week){
+    const sessionIds = (sessions || []).map(function(s){ return s.id; });
+    if (!sessionIds.length) return MUSCLE_GROUPS.map(function(g){ return { group: g, volume: 0, freq: 0 }; });
+    const { data: exs } = await supabaseClient.from('exercises').select('id, session_id, muscle_group').in('session_id', sessionIds);
+    const exIds = (exs || []).map(function(e){ return e.id; });
+    const { data: targetData } = exIds.length
+      ? await supabaseClient.from('exercise_targets').select('exercise_id, target_series').in('exercise_id', exIds).eq('week', week)
+      : { data: [] };
+    const volume = {}; const freqSessions = {};
+    MUSCLE_GROUPS.forEach(function(g){ volume[g] = 0; freqSessions[g] = new Set(); });
+    (exs || []).forEach(function(ex){
+      const g = ex.muscle_group;
+      if (!g || MUSCLE_GROUPS.indexOf(g) === -1) return;
+      const t = (targetData || []).find(function(x){ return x.exercise_id === ex.id; });
+      const series = t && t.target_series != null ? t.target_series : 0;
+      if (series > 0) {
+        volume[g] += series;
+        freqSessions[g].add(ex.session_id);
+      }
+    });
+    return MUSCLE_GROUPS.map(function(g){ return { group: g, volume: volume[g], freq: freqSessions[g].size }; });
+  }
+  function volumeTableInnerHtml(rows, week){
+    let html = '<h4 style="margin:0 0 4px;font-size:13.5px;">Volume & fréquence — Semaine S' + week + '</h4>' +
+      '<p style="margin:0 0 12px;font-size:11.5px;color:var(--text-dim);">Volume = total de séries sur la semaine · Fréquence = nombre de jours travaillés</p>' +
+      '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12.5px;">' +
+      '<thead><tr style="text-align:left;">' +
+        '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-faint);">Groupe</th>' +
+        '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-faint);text-align:center;">Volume (séries)</th>' +
+        '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-faint);text-align:center;">Fréquence (jours)</th>' +
+      '</tr></thead><tbody>';
+    rows.forEach(function(r){
+      const weak = r.volume === 0;
+      html += '<tr style="border-top:1px solid var(--border);' + (weak ? 'opacity:0.5;' : '') + '">' +
+        '<td style="padding:7px 8px;">' + esc(r.group) + '</td>' +
+        '<td style="padding:7px 8px;text-align:center;font-weight:600;font-family:\'Space Grotesk\',sans-serif;">' + r.volume + '</td>' +
+        '<td style="padding:7px 8px;text-align:center;">' + r.freq + '</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table></div>';
+    return html;
+  }
+
   function compressImage(file, maxDim, quality){
     return new Promise(function(resolve, reject){
       const img = new Image();
@@ -347,7 +391,13 @@
     html += '</div>';
     html += '<div class="week-chips mini-form" id="week-chips" style="margin-bottom:20px;"></div>';
     html += '<div id="exercise-list"></div>';
+    html += '<div id="volume-table" class="card" style="margin-top:18px;"></div>';
     el.innerHTML = html;
+
+    computeVolumeTable(sessions, currentWeek).then(function(rows){
+      const container = document.getElementById('volume-table');
+      if (container) container.innerHTML = volumeTableInnerHtml(rows, currentWeek);
+    });
 
     const weekWrap = document.getElementById('week-chips');
     for (let w = 1; w <= 12; w++) {

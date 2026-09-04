@@ -128,6 +128,53 @@
   function mealTypeColor(name){ return MEAL_TYPE_COLORS[name] || '#F7C725'; }
   const DAY_TYPE_LABELS = { training: "Jour d'entraînement", off: 'Jour off', diet1: 'Diète 1', diet2: 'Diète 2' };
   function dayTypeLabel(type){ return DAY_TYPE_LABELS[type] || type; }
+
+  const MUSCLE_GROUPS = ['Quadriceps', 'Ischio-jambiers', 'Fessiers', 'Mollets', 'Pectoraux', 'Dos', 'Épaules', 'Biceps', 'Triceps', 'Abdominaux'];
+  function muscleGroupOptions(current){
+    return '<option value="">Groupe musculaire</option>' + MUSCLE_GROUPS.map(function(g){ return '<option value="' + g + '"' + (g === current ? ' selected' : '') + '>' + g + '</option>'; }).join('');
+  }
+  async function computeVolumeTable(sessions, week){
+    const sessionIds = (sessions || []).map(function(s){ return s.id; });
+    if (!sessionIds.length) return MUSCLE_GROUPS.map(function(g){ return { group: g, volume: 0, freq: 0 }; });
+    const { data: exs } = await supabaseClient.from('exercises').select('id, session_id, muscle_group').in('session_id', sessionIds);
+    const exIds = (exs || []).map(function(e){ return e.id; });
+    const { data: targetData } = exIds.length
+      ? await supabaseClient.from('exercise_targets').select('exercise_id, target_series').in('exercise_id', exIds).eq('week', week)
+      : { data: [] };
+    const volume = {}; const freqSessions = {};
+    MUSCLE_GROUPS.forEach(function(g){ volume[g] = 0; freqSessions[g] = new Set(); });
+    (exs || []).forEach(function(ex){
+      const g = ex.muscle_group;
+      if (!g || MUSCLE_GROUPS.indexOf(g) === -1) return;
+      const t = (targetData || []).find(function(x){ return x.exercise_id === ex.id; });
+      const series = t && t.target_series != null ? t.target_series : 0;
+      if (series > 0) {
+        volume[g] += series;
+        freqSessions[g].add(ex.session_id);
+      }
+    });
+    return MUSCLE_GROUPS.map(function(g){ return { group: g, volume: volume[g], freq: freqSessions[g].size }; });
+  }
+  function volumeTableInnerHtml(rows, week){
+    let html = '<h4 style="margin:0 0 4px;font-size:13.5px;">Volume & fréquence — Semaine S' + week + '</h4>' +
+      '<p style="margin:0 0 12px;font-size:11.5px;color:var(--text-dim);">Volume = total de séries sur la semaine · Fréquence = nombre de jours travaillés</p>' +
+      '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12.5px;">' +
+      '<thead><tr style="text-align:left;">' +
+        '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-faint);">Groupe</th>' +
+        '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-faint);text-align:center;">Volume (séries)</th>' +
+        '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-faint);text-align:center;">Fréquence (jours)</th>' +
+      '</tr></thead><tbody>';
+    rows.forEach(function(r){
+      const weak = r.volume === 0;
+      html += '<tr style="border-top:1px solid var(--border);' + (weak ? 'opacity:0.5;' : '') + '">' +
+        '<td style="padding:7px 8px;">' + esc(r.group) + '</td>' +
+        '<td style="padding:7px 8px;text-align:center;font-weight:600;font-family:\'Space Grotesk\',sans-serif;">' + r.volume + '</td>' +
+        '<td style="padding:7px 8px;text-align:center;">' + r.freq + '</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table></div>';
+    return html;
+  }
   function currentWeekFor(program){
     const days = Math.floor((Date.now() - new Date(program.start_date + 'T00:00:00')) / 86400000);
     return Math.max(1, Math.min(12, Math.floor(days / 7) + 1));
@@ -409,7 +456,15 @@
       '<div class="mini-field"><label>Ordre</label><input id="new-sess-order" type="number" style="width:70px;" value="' + ((sessions && sessions.length || 0) + 1) + '"></div>' +
       '<div class="mini-field"><label>Format</label><select id="new-sess-format"><option value="strength">Musculation</option><option value="circuit">Circuit</option></select></div>' +
       '<button class="btn" id="add-sess-btn">+ Ajouter</button></div>';
+    html += '<div id="volume-table" class="card" style="margin-top:18px;"></div>';
     el.innerHTML = html;
+
+    async function refreshVolume(){
+      const rows = await computeVolumeTable(sessions || [], currentWeek);
+      const container = document.getElementById('volume-table');
+      if (container) container.innerHTML = volumeTableInnerHtml(rows, currentWeek);
+    }
+    refreshVolume();
 
     el.querySelectorAll('.week-chip').forEach(function(chip){
       chip.addEventListener('click', function(){
@@ -437,7 +492,7 @@
           const isOpen = body.style.display !== 'none';
           body.style.display = isOpen ? 'none' : 'block';
           head.classList.toggle('open', !isOpen);
-          if (!isOpen) await renderExercises(body, s);
+          if (!isOpen) await renderExercises(body, s, refreshVolume);
         });
       });
     }
@@ -454,7 +509,7 @@
     });
   }
 
-  async function renderExercises(body, session){
+  async function renderExercises(body, session, onUpdate){
     const { data: exercises } = await supabaseClient.from('exercises').select('*').eq('session_id', session.id).order('exercise_order', { ascending: true });
     const exIds = (exercises || []).map(function(e){ return e.id; });
     const prevWeek = currentWeek - 1;
@@ -526,6 +581,7 @@
         '<div style="flex:1;">' + (ex.youtube_url ? '<a href="' + esc(ex.youtube_url) + '" target="_blank" rel="noopener" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--accent);">' + esc(ex.name) + '</a>' : esc(ex.name)) +
           (sColor ? ' <span style="font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:999px;background:' + sColor + '22;color:' + sColor + ';">SUPERSET ' + esc(ex.superset_label.trim().toUpperCase()) + (groupMates.length ? ' · ' + groupMates.map(function(e){ return esc(e.name); }).join(', ') : '') + '</span>' : '') +
         '</div>' +
+        '<button class="del-ex-btn" data-id="' + ex.id + '" title="Supprimer l\'exercice" style="background:none;border:none;color:var(--warn);cursor:pointer;font-size:18px;line-height:1;padding:2px 4px;flex:none;">×</button>' +
         '</div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:8px;">' +
         '<input class="mini-input ex-series" data-id="' + ex.id + '" type="number" min="1" value="' + (t && t.target_series != null ? t.target_series : '') + '" placeholder="séries" style="width:64px;text-align:center;">' +
@@ -533,6 +589,7 @@
         '<input class="mini-input ex-charge" data-id="' + ex.id + '" type="number" step="0.5" value="' + (t && t.target_charge != null ? t.target_charge : '') + '" placeholder="kg" style="width:70px;text-align:center;">' +
         '<input class="mini-input ex-rest" data-id="' + ex.id + '" type="text" value="' + esc(t && t.target_rest != null ? t.target_rest : '') + '" placeholder="repos' + (sColor ? ' (commun)' : '') + '" style="width:' + (sColor ? '100' : '80') + 'px;text-align:center;">' +
         '<input class="mini-input ex-superset-label" list="superset-labels" data-id="' + ex.id + '" type="text" value="' + esc(ex.superset_label || '') + '" placeholder="Superset (ex: A)" style="width:110px;text-align:center;">' +
+        '<select class="mini-input ex-muscle" data-id="' + ex.id + '" style="width:140px;">' + muscleGroupOptions(ex.muscle_group) + '</select>' +
         '</div>' +
         '<input class="mini-input ex-youtube" data-id="' + ex.id + '" type="url" value="' + esc(ex.youtube_url || '') + '" placeholder="Lien YouTube (optionnel)" style="font-size:11.5px;">' +
         (realiseLine ? '<div style="font-size:11px;' + (hasLog ? 'color:var(--text-dim);' : 'color:var(--text-faint);font-style:italic;') + '">' + realiseLine + '</div>' : '') +
@@ -546,6 +603,7 @@
       '<div class="mini-field"><label>Charge (kg)</label><input class="new-ex-charge" type="number" step="0.5" style="width:80px;"></div>' +
       '<div class="mini-field"><label>Repos</label><input class="new-ex-rest" type="text" placeholder="Ex: 1\'30" style="width:90px;"></div>' +
       '<div class="mini-field"><label>Superset (nom)</label><input class="new-ex-superset-label" list="superset-labels" type="text" placeholder="Ex: A" style="width:100px;"></div>' +
+      '<div class="mini-field"><label>Groupe musculaire</label><select class="new-ex-muscle" style="width:150px;">' + muscleGroupOptions(null) + '</select></div>' +
       '<div class="mini-field" style="flex:1;min-width:160px;"><label>Lien YouTube (optionnel)</label><input class="new-ex-youtube" type="url" placeholder="https://youtube.com/..."></div>' +
       '<button class="btn add-ex-btn" style="padding:9px 16px;">+ Ajouter</button></div>';
     body.innerHTML = html;
@@ -584,6 +642,7 @@
           }
         }
         toast('Mis à jour.');
+        if (onUpdate && this.classList.contains('ex-series')) await onUpdate();
       });
     });
 
@@ -594,7 +653,29 @@
         const { error } = await supabaseClient.from('exercises').update({ superset_label: label }).eq('id', id);
         if (error) { toast(error.message, true); return; }
         toast(label ? 'Superset "' + label + '" enregistré.' : 'Superset retiré.');
-        await renderExercises(body, session);
+        await renderExercises(body, session, onUpdate);
+      });
+    });
+
+    body.querySelectorAll('.ex-muscle').forEach(function(sel){
+      sel.addEventListener('change', async function(){
+        const id = this.dataset.id;
+        const group = this.value || null;
+        const { error } = await supabaseClient.from('exercises').update({ muscle_group: group }).eq('id', id);
+        if (error) { toast(error.message, true); return; }
+        toast(group ? 'Groupe musculaire enregistré.' : 'Groupe musculaire retiré.');
+        if (onUpdate) await onUpdate();
+      });
+    });
+
+    body.querySelectorAll('.del-ex-btn').forEach(function(btn){
+      btn.addEventListener('click', async function(){
+        if (!confirm('Supprimer cet exercice ? Cette action est définitive.')) return;
+        const { error } = await supabaseClient.from('exercises').delete().eq('id', btn.dataset.id);
+        if (error) { toast(error.message, true); return; }
+        toast('Exercice supprimé.');
+        await renderExercises(body, session, onUpdate);
+        if (onUpdate) await onUpdate();
       });
     });
 
@@ -604,7 +685,7 @@
         const { error } = await supabaseClient.from('exercises').update({ youtube_url: url || null }).eq('id', this.dataset.id);
         if (error) { toast(error.message, true); return; }
         toast('Lien enregistré.');
-        await renderExercises(body, session);
+        await renderExercises(body, session, onUpdate);
       });
     });
 
@@ -615,16 +696,18 @@
       const charge = body.querySelector('.new-ex-charge').value === '' ? null : parseFloat(body.querySelector('.new-ex-charge').value);
       const rest = body.querySelector('.new-ex-rest').value.trim() === '' ? null : body.querySelector('.new-ex-rest').value.trim();
       const supersetLabel = body.querySelector('.new-ex-superset-label').value.trim() || null;
+      const muscleGroup = body.querySelector('.new-ex-muscle').value || null;
       const youtubeUrl = body.querySelector('.new-ex-youtube').value.trim() || null;
       if (!name) { toast('Donne un nom à l\'exercice.', true); return; }
       const order = (exercises ? exercises.length : 0) + 1;
-      const { data: newEx, error } = await supabaseClient.from('exercises').insert({ session_id: session.id, name: name, exercise_order: order, youtube_url: youtubeUrl, superset_label: supersetLabel }).select().single();
+      const { data: newEx, error } = await supabaseClient.from('exercises').insert({ session_id: session.id, name: name, exercise_order: order, youtube_url: youtubeUrl, superset_label: supersetLabel, muscle_group: muscleGroup }).select().single();
       if (error) { toast(error.message, true); return; }
       if (series !== null || reps !== null || charge !== null || rest !== null) {
         await supabaseClient.from('exercise_targets').insert({ exercise_id: newEx.id, week: currentWeek, target_series: series, target_reps: reps, target_charge: charge, target_rest: rest });
       }
       toast('Exercice ajouté.');
-      await renderExercises(body, session);
+      await renderExercises(body, session, onUpdate);
+      if (onUpdate) await onUpdate();
     });
   }
 
