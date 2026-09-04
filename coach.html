@@ -129,21 +129,24 @@
   const DAY_TYPE_LABELS = { training: "Jour d'entraînement", off: 'Jour off', diet1: 'Diète 1', diet2: 'Diète 2' };
   function dayTypeLabel(type){ return DAY_TYPE_LABELS[type] || type; }
 
-  const MUSCLE_GROUPS = ['Quadriceps', 'Ischio-jambiers', 'Fessiers', 'Mollets', 'Pectoraux', 'Dos', 'Épaules', 'Biceps', 'Triceps', 'Abdominaux'];
+  const MUSCLE_GROUPS = ['Quadriceps', 'Ischio-jambiers', 'Fessiers', 'Mollets', 'Pectoraux', 'Dorsaux', 'Trapèzes', 'Lombaires', 'Épaules', 'Biceps', 'Triceps', 'Abdominaux'];
   const MUSCLE_KEYWORDS = [
     { groups: ['Quadriceps', 'Fessiers'], keywords: ['squat', 'gobelet squat', 'goblet squat', 'fente', 'hack squat', 'sissy squat', 'presse a cuisse', 'presse à cuisse', 'presse'] },
     { groups: ['Quadriceps'], keywords: ['leg extension', 'quadriceps'] },
     { groups: ['Ischio-jambiers'], keywords: ['leg curl', 'ischio'] },
-    { groups: ['Ischio-jambiers', 'Fessiers', 'Dos'], keywords: ['souleve de terre', 'soulevé de terre', 'deadlift', 'romanian', 'rdl', 'jambes tendues', 'good morning', 'hyperextension'] },
+    { groups: ['Ischio-jambiers', 'Fessiers'], keywords: ['souleve de terre', 'soulevé de terre', 'deadlift', 'romanian', 'rdl', 'jambes tendues'] },
+    { groups: ['Lombaires'], keywords: ['good morning', 'hyperextension', 'lombaire', 'extension lombaire', 'back extension'] },
     { groups: ['Fessiers'], keywords: ['fessier', 'hip thrust', 'glute'] },
     { groups: ['Mollets'], keywords: ['mollet', 'calf'] },
     { groups: ['Pectoraux', 'Triceps', 'Épaules'], keywords: ['developpe couche', 'développé couché', 'developpe incline', 'développé incliné', 'bench press'] },
     { groups: ['Pectoraux'], keywords: ['pectoraux', 'ecarte', 'écarté', 'pec deck'] },
     { groups: ['Pectoraux', 'Triceps'], keywords: ['dips'] },
-    { groups: ['Dos'], keywords: ['pull-over', 'pull over'] },
-    { groups: ['Dos', 'Biceps'], keywords: ['tirage', 'rowing', 'row', 'traction', 'pull-up', 'pulldown', 'chin-up', 'chin up', 'lat'] },
+    { groups: ['Dorsaux', 'Biceps'], keywords: ['tirage vertical', 'pulldown', 'lat pulldown', 'pull-up', 'pull up', 'chin-up', 'chin up', 'traction'] },
+    { groups: ['Dorsaux'], keywords: ['pull-over', 'pull over'] },
+    { groups: ['Trapèzes', 'Dorsaux', 'Biceps'], keywords: ['rowing', 'row', 'tirage horizontal', 'rowing barre', 'seated row', 't-bar row', 'tirage poulie basse', 'tirage buste penche', 'tirage buste penché'] },
+    { groups: ['Trapèzes'], keywords: ['shrug', 'haussement', 'face pull', 'trapeze', 'trapèze'] },
     { groups: ['Épaules', 'Triceps'], keywords: ['developpe militaire', 'développé militaire', 'overhead press', 'shoulder press'] },
-    { groups: ['Épaules'], keywords: ['epaule', 'épaule', 'elevation', 'élévation', 'oiseau', 'shoulder', 'shrug', 'haussement'] },
+    { groups: ['Épaules'], keywords: ['epaule', 'épaule', 'elevation', 'élévation', 'oiseau', 'shoulder'] },
     { groups: ['Biceps'], keywords: ['curl biceps', 'curl marteau', 'biceps curl', 'biceps'] },
     { groups: ['Triceps'], keywords: ['triceps', 'barre au front', 'pushdown', 'skull crusher'] },
     { groups: ['Abdominaux'], keywords: ['abdo', 'crunch', 'gainage', 'planche', 'obliques', 'russian twist', 'mountain climber'] }
@@ -708,10 +711,12 @@
       input.addEventListener('change', async function(){
         const name = this.value.trim();
         if (!name) { toast('Le nom ne peut pas être vide.', true); this.value = exerciseById(this.dataset.id).name; return; }
-        const { error } = await supabaseClient.from('exercises').update({ name: name }).eq('id', this.dataset.id);
+        const detected = detectMuscleGroups(name);
+        const { error } = await supabaseClient.from('exercises').update({ name: name, muscle_groups: detected.length ? detected : null }).eq('id', this.dataset.id);
         if (error) { toast(error.message, true); return; }
         toast('Nom mis à jour.');
         await renderExercises(body, session, onUpdate);
+        if (onUpdate) await onUpdate();
       });
     });
 
