@@ -998,11 +998,11 @@
   }
 
   async function renderMealItems(el, mealId, onUpdate){
-    const { data: items } = await supabaseClient.from('meal_items').select('*, foods(*)').eq('meal_id', mealId);
+    const { data: items } = await supabaseClient.from('meal_items').select('*, foods(*)').eq('meal_id', mealId).order('created_at', { ascending: true });
     const itemIds = (items || []).map(function(it){ return it.id; });
     let altsByItem = {};
     if (itemIds.length) {
-      const { data: alts } = await supabaseClient.from('meal_item_alternatives').select('*, foods(*)').in('meal_item_id', itemIds);
+      const { data: alts } = await supabaseClient.from('meal_item_alternatives').select('*, foods(*)').in('meal_item_id', itemIds).order('created_at', { ascending: true });
       (alts || []).forEach(function(a){
         if (!altsByItem[a.meal_item_id]) altsByItem[a.meal_item_id] = [];
         altsByItem[a.meal_item_id].push(a);
