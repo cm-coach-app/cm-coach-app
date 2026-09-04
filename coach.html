@@ -473,6 +473,29 @@
     }
     function targetFor(exId){ return targets.find(function(t){ return t.exercise_id === exId; }); }
     function photoFor(exId){ return photos.find(function(p){ return p.exercise_id === exId; }); }
+    function exerciseById(exId){ return (exercises || []).find(function(e){ return e.id === exId; }); }
+
+    const SUPERSET_COLORS = ['#C77DFF', '#7FB8E0', '#FF8562', '#4ADE80', '#F7C725'];
+    const supersetColor = {};
+    (function(){
+      let colorIdx = 0;
+      (exercises || []).forEach(function(ex){
+        if (ex.superset_with_id && exerciseById(ex.superset_with_id) && !supersetColor[ex.id]) {
+          const color = SUPERSET_COLORS[colorIdx % SUPERSET_COLORS.length];
+          supersetColor[ex.id] = color;
+          supersetColor[ex.superset_with_id] = color;
+          colorIdx++;
+        }
+      });
+    })();
+    function supersetOptions(ex){
+      let opts = '<option value="">Pas de superset</option>';
+      (exercises || []).forEach(function(other){
+        if (other.id === ex.id) return;
+        opts += '<option value="' + other.id + '"' + (ex.superset_with_id === other.id ? ' selected' : '') + '>' + esc(other.name) + '</option>';
+      });
+      return opts;
+    }
 
     let html = '';
     (exercises || []).forEach(function(ex){
@@ -496,16 +519,24 @@
       } else {
         realiseLine = 'Pas enregistré par l\'élève en S' + prevWeek;
       }
-      html += '<div class="row" style="flex-direction:column;align-items:stretch;gap:6px;">' +
+      const sColor = supersetColor[ex.id];
+      const partnerEx = ex.superset_with_id ? exerciseById(ex.superset_with_id) : null;
+      html += '<div class="row" style="flex-direction:column;align-items:stretch;gap:6px;' + (sColor ? 'border-left:3px solid ' + sColor + ';padding-left:8px;' : '') + '">' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
         (photo ? '<a href="' + esc(photo.photo_url) + '" target="_blank" rel="noopener" title="Voir la photo de la plaque" style="width:30px;height:30px;border-radius:7px;overflow:hidden;flex:none;border:1px solid var(--border);"><img src="' + esc(photo.photo_url) + '" style="width:100%;height:100%;object-fit:cover;"></a>' : '<span title="Pas de photo" style="width:30px;height:30px;border-radius:7px;flex:none;border:1px solid var(--border);background:var(--surface-3);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-faint);"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>') +
-        '<div style="flex:1;">' + (ex.youtube_url ? '<a href="' + esc(ex.youtube_url) + '" target="_blank" rel="noopener" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--accent);">' + esc(ex.name) + '</a>' : esc(ex.name)) + '</div>' +
+        '<div style="flex:1;">' + (ex.youtube_url ? '<a href="' + esc(ex.youtube_url) + '" target="_blank" rel="noopener" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--accent);">' + esc(ex.name) + '</a>' : esc(ex.name)) +
+          (sColor && partnerEx ? ' <span style="font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:999px;background:' + sColor + '22;color:' + sColor + ';">SUPERSET · ' + esc(partnerEx.name) + '</span>' : '') +
+        '</div>' +
         '</div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:8px;">' +
         '<input class="mini-input ex-series" data-id="' + ex.id + '" type="number" min="1" value="' + (t && t.target_series != null ? t.target_series : '') + '" placeholder="séries" style="width:64px;text-align:center;">' +
         '<input class="mini-input ex-reps" data-id="' + ex.id + '" type="number" value="' + (t && t.target_reps != null ? t.target_reps : '') + '" placeholder="reps" style="width:64px;text-align:center;">' +
         '<input class="mini-input ex-charge" data-id="' + ex.id + '" type="number" step="0.5" value="' + (t && t.target_charge != null ? t.target_charge : '') + '" placeholder="kg" style="width:70px;text-align:center;">' +
-        '<input class="mini-input ex-rest" data-id="' + ex.id + '" type="text" value="' + esc(t && t.target_rest != null ? t.target_rest : '') + '" placeholder="repos" style="width:80px;text-align:center;">' +
+        '<input class="mini-input ex-rest" data-id="' + ex.id + '" type="text" value="' + esc(t && t.target_rest != null ? t.target_rest : '') + '" placeholder="repos' + (sColor ? ' (commun)' : '') + '" style="width:' + (sColor ? '100' : '80') + 'px;text-align:center;">' +
+        '</div>' +
+        '<div class="mini-field" style="max-width:220px;">' +
+          '<label>Superset avec</label>' +
+          '<select class="mini-input ex-superset" data-id="' + ex.id + '">' + supersetOptions(ex) + '</select>' +
         '</div>' +
         '<input class="mini-input ex-youtube" data-id="' + ex.id + '" type="url" value="' + esc(ex.youtube_url || '') + '" placeholder="Lien YouTube (optionnel)" style="font-size:11.5px;">' +
         (realiseLine ? '<div style="font-size:11px;' + (hasLog ? 'color:var(--text-dim);' : 'color:var(--text-faint);font-style:italic;') + '">' + realiseLine + '</div>' : '') +
@@ -536,7 +567,45 @@
           { exercise_id: id, week: currentWeek, target_series: series, target_reps: reps, target_charge: charge, target_rest: rest },
           { onConflict: 'exercise_id,week' }
         );
-        if (error) toast(error.message, true); else toast('Mis à jour.');
+        if (error) { toast(error.message, true); return; }
+        const ex = exerciseById(id);
+        if (ex && ex.superset_with_id && this.classList.contains('ex-rest')) {
+          const pt = targetFor(ex.superset_with_id);
+          await supabaseClient.from('exercise_targets').upsert(
+            { exercise_id: ex.superset_with_id, week: currentWeek,
+              target_series: pt && pt.target_series != null ? pt.target_series : null,
+              target_reps: pt && pt.target_reps != null ? pt.target_reps : null,
+              target_charge: pt && pt.target_charge != null ? pt.target_charge : null,
+              target_rest: rest },
+            { onConflict: 'exercise_id,week' }
+          );
+          const partnerRestInput = body.querySelector('.ex-rest[data-id="' + ex.superset_with_id + '"]');
+          if (partnerRestInput) partnerRestInput.value = rest || '';
+        }
+        toast('Mis à jour.');
+      });
+    });
+
+    body.querySelectorAll('.ex-superset').forEach(function(sel){
+      sel.addEventListener('change', async function(){
+        const id = this.dataset.id;
+        const newPartnerId = this.value || null;
+        const ex = exerciseById(id);
+        const oldPartnerId = ex ? ex.superset_with_id : null;
+        if (oldPartnerId && oldPartnerId !== newPartnerId) {
+          await supabaseClient.from('exercises').update({ superset_with_id: null }).eq('id', oldPartnerId).eq('superset_with_id', id);
+        }
+        const { error } = await supabaseClient.from('exercises').update({ superset_with_id: newPartnerId }).eq('id', id);
+        if (error) { toast(error.message, true); return; }
+        if (newPartnerId) {
+          const partner = exerciseById(newPartnerId);
+          if (partner && partner.superset_with_id && partner.superset_with_id !== id) {
+            await supabaseClient.from('exercises').update({ superset_with_id: null }).eq('id', partner.superset_with_id).eq('superset_with_id', newPartnerId);
+          }
+          await supabaseClient.from('exercises').update({ superset_with_id: id }).eq('id', newPartnerId);
+        }
+        toast(newPartnerId ? 'Superset lié.' : 'Superset retiré.');
+        await renderExercises(body, session);
       });
     });
 
