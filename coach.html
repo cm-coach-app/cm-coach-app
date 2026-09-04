@@ -471,6 +471,23 @@
         toast('Calculateur enregistré.');
       });
     });
+
+    ['cal-taille', 'cal-age'].forEach(function(id){
+      document.getElementById(id).addEventListener('change', async function(){
+        const height = document.getElementById('cal-taille').value;
+        const age = document.getElementById('cal-age').value;
+        const { error } = await supabaseClient.from('profiles').update({
+          height_cm: height === '' ? null : parseInt(height, 10),
+          age: age === '' ? null : parseInt(age, 10)
+        }).eq('id', selectedId);
+        if (error) { toast(error.message, true); return; }
+        const heightField = document.getElementById('c-height');
+        const ageField = document.getElementById('c-age');
+        if (heightField) heightField.value = height;
+        if (ageField) ageField.value = age;
+        toast('Taille / âge mis à jour.');
+      });
+    });
   }
 
   // ---- Shared: active program ----
